@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const CSS = `
@@ -38,6 +38,7 @@ const CSS = `
   .inp::placeholder { color:#c4c4c4; }
   .sbtn { transition: opacity .15s, transform .1s; }
   .sbtn:hover:not(:disabled) { opacity:.9; transform:translateY(-1px); }
+  .src-btn { -webkit-tap-highlight-color: transparent; touch-action: manipulation; user-select: none; }
 `;
 
 function injectCSS() {
@@ -122,7 +123,6 @@ function Sidebar({ onLogout }) {
   );
 }
 
-// ─── Source quick-pick buttons ────────────────────────────────────────────────
 const SOURCES = [
   { label:"Pocket money",  emoji:"👛" },
   { label:"Part-time job", emoji:"💼" },
@@ -134,6 +134,17 @@ const SOURCES = [
   { label:"Other",         emoji:"✨" },
 ];
 
+// ⚠️ IMPORTANT: F must be defined OUTSIDE AddIncome.
+// If defined inside, React treats it as a new component type on every render,
+// which unmounts/remounts the input inside it — causing focus loss after each keystroke.
+const F = ({ label, hint, children }) => (
+  <div style={{ marginBottom:18 }}>
+    <label style={{ fontSize:13, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom:6 }}>{label}</label>
+    {hint && <div style={{ fontSize:11, color:"var(--ink4)", marginBottom:6 }}>{hint}</div>}
+    {children}
+  </div>
+);
+
 export default function AddIncome() {
   injectCSS();
   const navigate = useNavigate();
@@ -143,14 +154,33 @@ export default function AddIncome() {
   const [source, setSource]   = useState("");
   const [date, setDate]       = useState(new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus]   = useState(null); // "success" | "error"
+  const [status, setStatus]   = useState(null);
   const [errMsg, setErrMsg]   = useState("");
+
+  const amountRef = useRef(null);
 
   useEffect(() => {
     if (!token) navigate("/", { replace:true });
   }, []);
 
   function logout() { localStorage.removeItem("token"); navigate("/"); }
+
+  /**
+   * THE FIX:
+   * On mobile, tapping any non-input element triggers:
+   *   touchstart → touchend → blur (on current input) → focus (new element)
+   *
+   * By calling e.preventDefault() on BOTH onMouseDown AND onTouchStart,
+   * we stop the blur from firing on the currently focused input.
+   * Then we manually set state and re-focus the amount input,
+   * so the keyboard never dismisses.
+   */
+  function handleSourceTouchStart(e, label) {
+    e.preventDefault(); // stops blur on the focused input
+    setSource(label);
+    // Re-focus amount input — keyboard stays open
+    amountRef.current?.focus();
+  }
 
   async function save(e) {
     e.preventDefault();
@@ -182,23 +212,18 @@ export default function AddIncome() {
     }
   }
 
-  const F = ({ label, hint, children }) => (
-    <div style={{ marginBottom:18 }}>
-      <label style={{ fontSize:13, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom:6 }}>{label}</label>
-      {hint && <div style={{ fontSize:11, color:"var(--ink4)", marginBottom:6 }}>{hint}</div>}
-      {children}
-    </div>
-  );
-
   return (
     <div style={{ display:"flex", minHeight:"100vh" }}>
       <Sidebar onLogout={logout} />
 
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
 
-        {/* Header */}
         <div style={{ background:"var(--surface)", borderBottom:"1px solid var(--border)", padding:"16px 28px", display:"flex", alignItems:"center", gap:14 }}>
-          <button onClick={() => navigate(-1)} style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:7, border:"1px solid var(--border)", background:"transparent", color:"var(--ink3)", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
+          <button
+            onMouseDown={e => e.preventDefault()}
+            onTouchStart={e => { e.preventDefault(); navigate(-1); }}
+            onClick={() => navigate(-1)}
+            style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", borderRadius:7, border:"1px solid var(--border)", background:"transparent", color:"var(--ink3)", fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>
             <Icon d={ICONS.back} size={13} /> Back
           </button>
           <div>
@@ -210,7 +235,6 @@ export default function AddIncome() {
         <div style={{ flex:1, overflowY:"auto", padding:"32px 28px", background:"var(--bg)", display:"flex", justifyContent:"center" }}>
           <div className="fade" style={{ width:"100%", maxWidth:480 }}>
 
-            {/* Success state */}
             {status === "success" ? (
               <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"48px 32px", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
                 <div style={{ width:56, height:56, borderRadius:"50%", background:"var(--green-bg)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", animation:"check .4s ease" }}>
@@ -223,46 +247,75 @@ export default function AddIncome() {
               </div>
             ) : (
               <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"28px 28px", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
-
                 <form onSubmit={save}>
 
-                  {/* Amount */}
+                  {/* Amount — type="text" + inputMode="decimal" is the most reliable
+                      cross-platform way to get a numeric keyboard while keeping
+                      full control of focus/blur behaviour */}
                   <F label="How much did you receive? (₹)" hint="Enter the exact amount">
                     <div style={{ position:"relative" }}>
                       <span style={{ position:"absolute", left:13, top:"50%", transform:"translateY(-50%)", fontSize:14, color:"var(--ink3)", fontWeight:500 }}>₹</span>
                       <input
-                        type="number" required min="1" step="0.01"
+                        ref={amountRef}
+                        type="text"
+                        inputMode="decimal"
+                        pattern="[0-9]*\.?[0-9]*"
+                        required
                         placeholder="0"
-                        value={amount} onChange={e => setAmount(e.target.value)}
-                        className="inp" style={{ paddingLeft:28, fontSize:20, fontWeight:600 }}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck="false"
+                        value={amount}
+                        onChange={e => {
+                          const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+                          setAmount(v);
+                        }}
+                        className="inp"
+                        style={{ paddingLeft:28, fontSize:20, fontWeight:600 }}
                       />
                     </div>
                   </F>
 
-                  {/* Source — quick pick */}
+                  {/* Source quick-pick */}
                   <F label="Where did it come from?">
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8, marginBottom: source && !SOURCES.find(s=>s.label===source) ? 10 : 0 }}>
-                      {SOURCES.map(s => (
-                        <button key={s.label} type="button"
-                          onClick={() => setSource(s.label)}
-                          style={{
-                            padding:"9px 4px", borderRadius:8, cursor:"pointer", fontFamily:"inherit",
-                            border: source===s.label ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-                            background: source===s.label ? "rgba(124,92,191,.07)" : "var(--surface)",
-                            color: source===s.label ? "var(--accent)" : "var(--ink2)",
-                            fontSize:11, fontWeight:500, textAlign:"center",
-                            transition:"border-color .12s, background .12s",
-                          }}>
-                          <div style={{ fontSize:18, marginBottom:3 }}>{s.emoji}</div>
-                          {s.label}
-                        </button>
-                      ))}
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
+                      {SOURCES.map(s => {
+                        const sel = source === s.label;
+                        return (
+                          <button
+                            key={s.label}
+                            type="button"
+                            className="src-btn"
+                            /* Both events needed:
+                               - onMouseDown fires first on desktop, preventDefault stops blur
+                               - onTouchStart fires first on mobile, preventDefault stops blur  */
+                            onMouseDown={e => handleSourceTouchStart(e, s.label)}
+                            onTouchStart={e => handleSourceTouchStart(e, s.label)}
+                            style={{
+                              padding:"9px 4px", borderRadius:8, cursor:"pointer", fontFamily:"inherit",
+                              border: sel ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+                              background: sel ? "rgba(124,92,191,.07)" : "var(--surface)",
+                              color: sel ? "var(--accent)" : "var(--ink2)",
+                              fontSize:11, fontWeight:500, textAlign:"center",
+                              transition:"border-color .12s, background .12s",
+                            }}>
+                            <div style={{ fontSize:18, marginBottom:3 }}>{s.emoji}</div>
+                            {s.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </F>
 
                   {/* Date */}
                   <F label="When did you get it?" hint="Defaults to today">
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="inp" />
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={e => setDate(e.target.value)}
+                      className="inp"
+                    />
                   </F>
 
                   {/* Error */}

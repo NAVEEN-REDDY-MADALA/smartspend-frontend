@@ -147,8 +147,41 @@ const PAYMENTS = [
   { label:"Net Banking", emoji:"🏦" },
 ];
 
-// ─── Quick amounts for common student spends ──────────────────────────────────
 const QUICK_AMOUNTS = [50, 100, 150, 200, 500, 1000];
+
+// ─── F and QuickGrid MUST be outside AddExpense ───────────────────────────────
+// If defined inside, React creates a new component type on every render,
+// unmounting/remounting the DOM — which causes inputs to lose focus after each keystroke.
+
+const F = ({ label, hint, children }) => (
+  <div style={{ marginBottom:20 }}>
+    <label style={{ fontSize:13, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom: hint?4:6 }}>{label}</label>
+    {hint && <div style={{ fontSize:11, color:"var(--ink4)", marginBottom:6 }}>{hint}</div>}
+    {children}
+  </div>
+);
+
+const QuickGrid = ({ items, selected, onSelect, cols = 4 }) => (
+  <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:8 }}>
+    {items.map(item => (
+      <button key={item.label} type="button"
+        className="qbtn"
+        onClick={() => onSelect(item.label)}
+        style={{
+          padding:"9px 4px", borderRadius:8, fontFamily:"inherit",
+          border: selected===item.label ? "2px solid var(--accent)" : "1.5px solid var(--border)",
+          background: selected===item.label ? "rgba(124,92,191,.07)" : "var(--surface)",
+          color: selected===item.label ? "var(--accent)" : "var(--ink2)",
+          fontSize:11, fontWeight:500, textAlign:"center",
+        }}>
+        <div style={{ fontSize:17, marginBottom:3 }}>{item.emoji}</div>
+        {item.label}
+      </button>
+    ))}
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function AddExpense() {
   injectCSS();
@@ -158,9 +191,9 @@ export default function AddExpense() {
   const [amount,   setAmount]   = useState("");
   const [category, setCategory] = useState("");
   const [payment,  setPayment]  = useState("");
-  const [date,     setDate]     = useState(new Date().toISOString().split("T")[0]); // date picker stays as YYYY-MM-DD
+  const [date,     setDate]     = useState(new Date().toISOString().split("T")[0]);
   const [loading,  setLoading]  = useState(false);
-  const [status,   setStatus]   = useState(null); // "success" | "error"
+  const [status,   setStatus]   = useState(null);
   const [errMsg,   setErrMsg]   = useState("");
 
   useEffect(() => {
@@ -183,7 +216,6 @@ export default function AddExpense() {
           category,
           payment_method: payment,
           date,
-          // Send current time so the backend knows exactly when this was added
           created_at: new Date().toISOString(),
         }),
       });
@@ -207,36 +239,6 @@ export default function AddExpense() {
   }
 
   const canSubmit = amount && category && payment && date && !loading;
-
-  const F = ({ label, hint, children }) => (
-    <div style={{ marginBottom:20 }}>
-      <label style={{ fontSize:13, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom: hint?4:6 }}>{label}</label>
-      {hint && <div style={{ fontSize:11, color:"var(--ink4)", marginBottom:6 }}>{hint}</div>}
-      {children}
-    </div>
-  );
-
-  function QuickGrid({ items, selected, onSelect, cols = 4 }) {
-    return (
-      <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:8 }}>
-        {items.map(item => (
-          <button key={item.label} type="button"
-            className="qbtn"
-            onClick={() => onSelect(item.label)}
-            style={{
-              padding:"9px 4px", borderRadius:8, fontFamily:"inherit",
-              border: selected===item.label ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-              background: selected===item.label ? "rgba(124,92,191,.07)" : "var(--surface)",
-              color: selected===item.label ? "var(--accent)" : "var(--ink2)",
-              fontSize:11, fontWeight:500, textAlign:"center",
-            }}>
-            <div style={{ fontSize:17, marginBottom:3 }}>{item.emoji}</div>
-            {item.label}
-          </button>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div style={{ display:"flex", minHeight:"100vh" }}>
@@ -275,7 +277,6 @@ export default function AddExpense() {
 
                   {/* Amount */}
                   <F label="How much did you spend? (₹)">
-                    {/* Quick amounts */}
                     <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
                       {QUICK_AMOUNTS.map(q => (
                         <button key={q} type="button"
@@ -293,10 +294,14 @@ export default function AddExpense() {
                     </div>
                     <div style={{ position:"relative" }}>
                       <span style={{ position:"absolute", left:13, top:"50%", transform:"translateY(-50%)", fontSize:14, color:"var(--ink3)", fontWeight:500 }}>₹</span>
-                      <input type="number" required min="1" step="0.01"
+                      <input
+                        type="number" required min="1" step="0.01"
                         placeholder="0"
-                        value={amount} onChange={e => setAmount(e.target.value)}
-                        className="inp" style={{ paddingLeft:28, fontSize:20, fontWeight:600 }} />
+                        value={amount}
+                        onChange={e => setAmount(e.target.value)}
+                        className="inp"
+                        style={{ paddingLeft:28, fontSize:20, fontWeight:600 }}
+                      />
                     </div>
                   </F>
 
@@ -338,7 +343,6 @@ export default function AddExpense() {
                     {loading ? "Saving…" : "Save Expense"}
                   </button>
 
-                  {/* Hint when fields missing */}
                   {(!category || !payment) && (
                     <div style={{ textAlign:"center", marginTop:8, fontSize:11, color:"var(--ink4)" }}>
                       {!category && !payment ? "Pick a category and payment method ↑"

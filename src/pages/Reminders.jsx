@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// ─── Shared design system ─────────────────────────────────────────────────────
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,8 +60,8 @@ function ordinal(d) {
 }
 
 const CAT_ICONS = { Bills:"📄", Subscription:"📺", EMI:"💳", Insurance:"🛡️", Rent:"🏠", Other:"💰" };
+const MODAL_CATEGORIES = ["Bills","Subscription","EMI","Insurance","Rent","Other"];
 
-// ─── Icon ─────────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 14, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -84,7 +83,6 @@ const ICONS = {
   plus:     "M12 5v14M5 12h14",
 };
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   { label: null, items: [{ to:"/dashboard", label:"Home", icon:"home" }] },
   {
@@ -140,23 +138,21 @@ function Sidebar({ onLogout }) {
   );
 }
 
-// ─── Days until helper ────────────────────────────────────────────────────────
 function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0,0,0,0);
   const due   = new Date(dateStr); due.setHours(0,0,0,0);
   return Math.ceil((due - today) / 86400000);
 }
 
-// ─── Reminder Card ────────────────────────────────────────────────────────────
 function ReminderCard({ r, onPaid, onDelete, paying, deleting }) {
   const days = daysUntil(r.next_payment_date);
   const overdue = days < 0;
   const urgent  = days >= 0 && days <= 1;
   const warn    = days > 1 && days <= 7;
 
-  const urgencyColor  = overdue || urgent ? "var(--red)"   : warn ? "var(--amber)"   : "var(--green)";
-  const urgencyBg     = overdue || urgent ? "var(--red-bg)": warn ? "var(--amber-bg)": "var(--green-bg)";
-  const urgencyBorder = overdue || urgent ? "#fecaca"      : warn ? "#fde68a"         : "#bbf7d0";
+  const urgencyColor  = overdue || urgent ? "var(--red)"    : warn ? "var(--amber)"    : "var(--green)";
+  const urgencyBg     = overdue || urgent ? "var(--red-bg)" : warn ? "var(--amber-bg)" : "var(--green-bg)";
+  const urgencyBorder = overdue || urgent ? "#fecaca"       : warn ? "#fde68a"          : "#bbf7d0";
 
   const urgencyLabel = overdue
     ? `⚠️ ${Math.abs(days)} day${Math.abs(days)!==1?"s":""} overdue!`
@@ -165,16 +161,14 @@ function ReminderCard({ r, onPaid, onDelete, paying, deleting }) {
     : `${days} days left`;
 
   const notifChips = [
-    r.notify_7_days  && "7 days before",
-    r.notify_3_days  && "3 days before",
-    r.notify_1_day   && "1 day before",
+    r.notify_7_days   && "7 days before",
+    r.notify_3_days   && "3 days before",
+    r.notify_1_day    && "1 day before",
     r.notify_same_day && "On the day",
   ].filter(Boolean);
 
   return (
     <div className="rcard" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,.04)", borderTop:`3px solid ${urgencyColor}` }}>
-
-      {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12, paddingBottom:12, borderBottom:"1px solid var(--border)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:38, height:38, borderRadius:9, background:"#faf5ff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:19 }}>
@@ -187,8 +181,6 @@ function ReminderCard({ r, onPaid, onDelete, paying, deleting }) {
         </div>
         <div style={{ fontSize:20, fontWeight:700, color:"var(--accent)" }}>₹{fmt(r.amount)}</div>
       </div>
-
-      {/* Next payment + urgency */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ fontSize:12, color:"var(--ink3)" }}>
           Next payment:{" "}
@@ -200,8 +192,6 @@ function ReminderCard({ r, onPaid, onDelete, paying, deleting }) {
           {urgencyLabel}
         </span>
       </div>
-
-      {/* Notify chips */}
       {notifChips.length > 0 && (
         <div style={{ marginBottom:10 }}>
           <div style={{ fontSize:10, color:"var(--ink4)", marginBottom:5, textTransform:"uppercase", letterSpacing:".5px" }}>Remind me</div>
@@ -214,15 +204,11 @@ function ReminderCard({ r, onPaid, onDelete, paying, deleting }) {
           </div>
         </div>
       )}
-
-      {/* Auto-pay */}
       {r.auto_pay && (
         <div style={{ fontSize:11, fontWeight:600, color:"var(--blue)", background:"var(--blue-bg)", padding:"5px 10px", borderRadius:6, marginBottom:10, border:"1px solid #bfdbfe", display:"inline-block" }}>
           ⚡ Auto-Pay on
         </div>
       )}
-
-      {/* Actions */}
       <div style={{ display:"flex", gap:8, marginTop:12 }}>
         <button className="abtn" onClick={() => onPaid(r.id)} disabled={paying||deleting}
           style={{ flex:1, padding:"9px", borderRadius:7, border:"none", background: paying?"#f3f4f6":"var(--green)", color: paying?"var(--ink4)":"#fff", fontSize:12, fontWeight:600, fontFamily:"inherit", cursor: paying?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:5 }}>
@@ -239,10 +225,21 @@ function ReminderCard({ r, onPaid, onDelete, paying, deleting }) {
   );
 }
 
-// ─── Add Reminder Modal ───────────────────────────────────────────────────────
+// ─── F must be OUTSIDE AddModal so React doesn't remount inputs on every keystroke ───
+const ModalField = ({ label, required, children }) => (
+  <div style={{ marginBottom:14 }}>
+    <label style={{ fontSize:12, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom:5 }}>
+      {label}{required && <span style={{ color:"var(--red)" }}> *</span>}
+    </label>
+    {children}
+  </div>
+);
+
 function AddModal({ token, onClose, onSuccess }) {
-  const CATEGORIES = ["Bills","Subscription","EMI","Insurance","Rent","Other"];
-  const [form, setForm] = useState({ name:"", amount:"", category:"Bills", day_of_month:"1", notify_7_days:true, notify_3_days:false, notify_1_day:true, notify_same_day:true, auto_pay:false });
+  const [form, setForm] = useState({
+    name:"", amount:"", category:"Bills", day_of_month:"1",
+    notify_7_days:true, notify_3_days:false, notify_1_day:true, notify_same_day:true, auto_pay:false,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
@@ -264,20 +261,10 @@ function AddModal({ token, onClose, onSuccess }) {
     finally { setLoading(false); }
   }
 
-  const F = ({ label, required, children }) => (
-    <div style={{ marginBottom:14 }}>
-      <label style={{ fontSize:12, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom:5 }}>
-        {label}{required && <span style={{ color:"var(--red)" }}> *</span>}
-      </label>
-      {children}
-    </div>
-  );
-
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999, padding:16 }}>
       <div onClick={e=>e.stopPropagation()} style={{ background:"var(--surface)", borderRadius:12, width:"100%", maxWidth:480, maxHeight:"90vh", overflow:"auto", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
 
-        {/* Modal header */}
         <div style={{ padding:"16px 20px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div style={{ fontSize:15, fontWeight:700, color:"var(--ink)" }}>+ Add a payment reminder</div>
           <button onClick={onClose} style={{ width:28, height:28, borderRadius:"50%", border:"none", background:"#f3f4f6", color:"var(--ink3)", cursor:"pointer", fontSize:14, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -286,35 +273,35 @@ function AddModal({ token, onClose, onSuccess }) {
         </div>
 
         <form onSubmit={submit} style={{ padding:"20px" }}>
-          <F label="What's the payment for?" required>
+          <ModalField label="What's the payment for?" required>
             <input type="text" required placeholder="e.g. Netflix, Hostel rent, Phone EMI…" value={form.name} onChange={e=>set("name",e.target.value)} className="inp" />
-          </F>
+          </ModalField>
 
           <div style={{ display:"grid", gridTemplateColumns:"1.5fr 1fr", gap:12, marginBottom:14 }}>
-            <F label="Amount (₹)" required>
+            <ModalField label="Amount (₹)" required>
               <input type="number" required min="0" step="0.01" placeholder="499" value={form.amount} onChange={e=>set("amount",e.target.value)} className="inp" />
-            </F>
-            <F label="Which day of the month?" required>
+            </ModalField>
+            <ModalField label="Which day of the month?" required>
               <select value={form.day_of_month} onChange={e=>set("day_of_month",e.target.value)} className="inp">
                 {Array.from({length:31},(_,i)=>i+1).map(d=><option key={d} value={d}>{ordinal(d)}</option>)}
               </select>
-            </F>
+            </ModalField>
           </div>
 
-          <F label="Category">
+          <ModalField label="Category">
             <select value={form.category} onChange={e=>set("category",e.target.value)} className="inp">
-              {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+              {MODAL_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
-          </F>
+          </ModalField>
 
           <div style={{ marginBottom:14 }}>
             <div style={{ fontSize:12, fontWeight:500, color:"var(--ink2)", marginBottom:8 }}>Remind me before it's due</div>
             <div style={{ background:"#f9fafb", borderRadius:8, padding:"10px 12px", display:"grid", gap:8 }}>
               {[
-                { key:"notify_7_days",  label:"7 days before" },
-                { key:"notify_3_days",  label:"3 days before" },
-                { key:"notify_1_day",   label:"1 day before"  },
-                { key:"notify_same_day",label:"On the same day"},
+                { key:"notify_7_days",   label:"7 days before" },
+                { key:"notify_3_days",   label:"3 days before" },
+                { key:"notify_1_day",    label:"1 day before"  },
+                { key:"notify_same_day", label:"On the same day"},
               ].map(n => (
                 <label key={n.key} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--ink2)", cursor:"pointer" }}>
                   <input type="checkbox" checked={form[n.key]} onChange={e=>set(n.key,e.target.checked)} style={{ accentColor:"var(--accent)", width:14, height:14 }} />
@@ -346,7 +333,6 @@ function AddModal({ token, onClose, onSuccess }) {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Reminders() {
   injectCSS();
   const navigate = useNavigate();
@@ -396,9 +382,8 @@ export default function Reminders() {
 
   function logout() { localStorage.removeItem("token"); navigate("/"); }
 
-  // Sort: overdue first, then by days ascending
-  const sorted = [...reminders].sort((a,b) => daysUntil(a.next_payment_date) - daysUntil(b.next_payment_date));
-  const overdue = sorted.filter(r => daysUntil(r.next_payment_date) < 0);
+  const sorted   = [...reminders].sort((a,b) => daysUntil(a.next_payment_date) - daysUntil(b.next_payment_date));
+  const overdue  = sorted.filter(r => daysUntil(r.next_payment_date) < 0);
   const upcoming = sorted.filter(r => daysUntil(r.next_payment_date) >= 0);
 
   if (loading) return (
@@ -416,7 +401,6 @@ export default function Reminders() {
 
       {showModal && <AddModal token={token} onClose={()=>setShowModal(false)} onSuccess={()=>{ setShowModal(false); load(); showToast("Reminder saved! We'll remind you before it's due 🔔"); }} />}
 
-      {/* Toast */}
       {toast && (
         <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999, padding:"12px 18px", borderRadius:9, background: toast.ok?"var(--green)":"var(--red)", color:"#fff", fontSize:13, fontWeight:500, boxShadow:"0 8px 24px rgba(0,0,0,.15)", maxWidth:340 }}>
           {toast.text}
@@ -424,8 +408,6 @@ export default function Reminders() {
       )}
 
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-
-        {/* Header */}
         <div style={{ background:"var(--surface)", borderBottom:"1px solid var(--border)", padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:20, fontWeight:700, color:"var(--ink)" }}>Reminders 🔔</div>
@@ -437,7 +419,6 @@ export default function Reminders() {
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", background:"var(--bg)" }}>
-
           {reminders.length === 0 ? (
             <div className="fade" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"56px 20px", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
               <div style={{ fontSize:40, marginBottom:12 }}>📭</div>
@@ -449,8 +430,6 @@ export default function Reminders() {
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
-
-              {/* Overdue */}
               {overdue.length > 0 && (
                 <div className="fade">
                   <div style={{ fontSize:12, fontWeight:600, color:"var(--red)", textTransform:"uppercase", letterSpacing:"1px", marginBottom:10 }}>
@@ -461,8 +440,6 @@ export default function Reminders() {
                   </div>
                 </div>
               )}
-
-              {/* Upcoming */}
               {upcoming.length > 0 && (
                 <div className="f1">
                   <div style={{ fontSize:12, fontWeight:600, color:"var(--ink3)", textTransform:"uppercase", letterSpacing:"1px", marginBottom:10 }}>

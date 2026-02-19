@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
-// ─── Shared design system ─────────────────────────────────────────────────────
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,11 +54,14 @@ function injectCSS() {
   document.head.appendChild(s);
 }
 
-const fmt = n => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
+const fmt = n => {
+  const num = parseFloat(n);
+  if (isNaN(num)) return "0";
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(num);
+};
 
 const CAT_EMOJI = { Food:"🍜", Groceries:"🛒", Travel:"🚗", Shopping:"🛍️", Entertainment:"🎬", Bills:"💡", Medicine:"💊", Other:"💰" };
 
-// ─── Icon ─────────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 14, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -81,7 +83,6 @@ const ICONS = {
   sms:      "M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z",
 };
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   { label: null, items: [{ to:"/dashboard", label:"Home", icon:"home" }] },
   {
@@ -142,10 +143,8 @@ function Sidebar({ onLogout, pendingCount }) {
   );
 }
 
-// ─── Transaction Card ─────────────────────────────────────────────────────────
 function TxnCard({ txn, onAccept, onIgnore, accepting, ignoring }) {
   const fmt2 = (ds) => {
-    // Backend may return naive UTC strings without 'Z' suffix — force UTC parse
     const utcStr = ds.endsWith('Z') || ds.includes('+') ? ds : ds + 'Z';
     return new Date(utcStr).toLocaleString('en-IN', {
       day: 'numeric', month: 'short', year: 'numeric',
@@ -156,8 +155,6 @@ function TxnCard({ txn, onAccept, onIgnore, accepting, ignoring }) {
 
   return (
     <div className="txcard slide" style={{ background:"var(--surface)", borderRadius:10, padding:"18px 20px", boxShadow:"0 1px 4px rgba(0,0,0,.04)", borderLeft:"3px solid var(--accent) !important" }}>
-
-      {/* Top row */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
           <div style={{ width:44, height:44, borderRadius:10, background:"var(--blue-bg)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
@@ -165,15 +162,13 @@ function TxnCard({ txn, onAccept, onIgnore, accepting, ignoring }) {
           </div>
           <div>
             <div style={{ fontSize:20, fontWeight:700, color:"var(--ink)" }}>₹{fmt(txn.amount)}</div>
-            <div style={{ fontSize:13, color:"var(--ink3)", marginTop:1 }}>{txn.merchant}</div>
+            <div style={{ fontSize:13, color:"var(--ink3)", marginTop:1 }}>{txn.merchant || "Unknown merchant"}</div>
           </div>
         </div>
         <span style={{ padding:"3px 9px", borderRadius:99, fontSize:10, fontWeight:700, background:"rgba(124,92,191,.1)", color:"var(--accent)" }}>
           PENDING
         </span>
       </div>
-
-      {/* Details grid */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14, padding:"10px 12px", background:"#f9fafb", borderRadius:8 }}>
         <div>
           <div style={{ fontSize:10, color:"var(--ink4)", marginBottom:3 }}>CATEGORY GUESS</div>
@@ -184,15 +179,11 @@ function TxnCard({ txn, onAccept, onIgnore, accepting, ignoring }) {
           <div style={{ fontSize:12, fontWeight:500, color:"var(--ink2)" }}>{fmt2(txn.transaction_date)}</div>
         </div>
       </div>
-
-      {/* Explanation for students */}
       <div style={{ fontSize:11, color:"var(--ink3)", marginBottom:12, padding:"8px 10px", background:"var(--blue-bg)", borderRadius:7, border:"1px solid #bfdbfe" }}>
         📱 SmartSpend read this from your SMS — is it correct? Confirm or ignore it below.
       </div>
-
-      {/* Action buttons */}
       <div style={{ display:"flex", gap:8 }}>
-        <button className="abtn" onClick={() => onAccept(txn.sms_hash)} disabled={busy}
+        <button className="abtn" onClick={() => onAccept(txn.sms_hash, txn)} disabled={busy}
           style={{ flex:1, padding:"9px", borderRadius:7, border:"none", background: busy?"#f3f4f6":"var(--green)", color: busy?"var(--ink4)":"#fff", fontSize:13, fontWeight:600, cursor: busy?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
           {accepting ? <span style={{ display:"inline-block", animation:"spin .7s linear infinite" }}><Icon d={ICONS.refresh} size={13} /></span>
             : <Icon d={ICONS.check} size={13} />}
@@ -209,18 +200,17 @@ function TxnCard({ txn, onAccept, onIgnore, accepting, ignoring }) {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function DetectedTransactions() {
   injectCSS();
   const navigate = useNavigate();
 
-  const [pending, setPending]       = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const [spinning, setSpinning]     = useState(false);
-  const [accepting, setAccepting]   = useState(null); // sms_hash being accepted
-  const [ignoring, setIgnoring]     = useState(null); // sms_hash being ignored
-  const [toast, setToast]           = useState(null); // {text, ok}
+  const [pending, setPending]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [spinning, setSpinning]   = useState(false);
+  const [accepting, setAccepting] = useState(null);
+  const [ignoring, setIgnoring]   = useState(null);
+  const [toast, setToast]         = useState(null);
 
   const API = "https://smartspend-backend-aupt.onrender.com";
 
@@ -239,7 +229,7 @@ export default function DetectedTransactions() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setPending(await r.json());
       setError(null);
-    } catch (e) {
+    } catch {
       setError("Couldn't load transactions. Check your connection.");
     } finally {
       setLoading(false);
@@ -252,14 +242,25 @@ export default function DetectedTransactions() {
     setTimeout(() => setToast(null), 3500);
   }
 
-  async function handleAccept(smsHash) {
+  async function handleAccept(smsHash, originalTxn) {
     const token = localStorage.getItem("token");
     setAccepting(smsHash);
     try {
-      const r = await fetch(`${API}/api/detected/accept/${smsHash}`, { method:"POST", headers:{ Authorization:`Bearer ${token}` } });
+      const r = await fetch(`${API}/api/detected/accept/${smsHash}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!r.ok) throw new Error();
+
       const result = await r.json();
-      showToast(`Added ₹${fmt(result.amount)} at ${result.merchant} to your expenses ✓`, true);
+      console.log("Accept response:", result); // helps debug field names
+
+      // Try every common field name the API might return, fall back to original txn data
+      const amount   = result.amount   ?? result.expense?.amount   ?? originalTxn.amount;
+      const merchant = result.merchant ?? result.expense?.merchant  ?? result.expense?.category
+                     ?? result.description ?? originalTxn.merchant ?? "transaction";
+
+      showToast(`Added ₹${fmt(amount)} — ${merchant} to your expenses ✓`, true);
       window.dispatchEvent(new Event("transaction-confirmed"));
       await load();
     } catch {
@@ -273,7 +274,10 @@ export default function DetectedTransactions() {
     const token = localStorage.getItem("token");
     setIgnoring(smsHash);
     try {
-      const r = await fetch(`${API}/api/detected/ignore/${smsHash}`, { method:"POST", headers:{ Authorization:`Bearer ${token}` } });
+      const r = await fetch(`${API}/api/detected/ignore/${smsHash}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (!r.ok) throw new Error();
       showToast("Transaction ignored and removed.", true);
       await load();
@@ -299,24 +303,13 @@ export default function DetectedTransactions() {
     <div style={{ display:"flex", minHeight:"100vh" }}>
       <Sidebar onLogout={logout} pendingCount={pending.length} />
 
-      {/* Toast */}
       {toast && (
-        <div style={{
-          position:"fixed", bottom:24, right:24, zIndex:9999,
-          padding:"12px 18px", borderRadius:9,
-          background: toast.ok ? "var(--green)" : "var(--red)",
-          color:"#fff", fontSize:13, fontWeight:500,
-          boxShadow:"0 8px 24px rgba(0,0,0,.15)",
-          animation:"slideIn .25s ease",
-          maxWidth:340,
-        }}>
+        <div style={{ position:"fixed", bottom:24, right:24, zIndex:9999, padding:"12px 18px", borderRadius:9, background: toast.ok ? "var(--green)" : "var(--red)", color:"#fff", fontSize:13, fontWeight:500, boxShadow:"0 8px 24px rgba(0,0,0,.15)", animation:"slideIn .25s ease", maxWidth:340 }}>
           {toast.text}
         </div>
       )}
 
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-
-        {/* Header */}
         <div style={{ background:"var(--surface)", borderBottom:"1px solid var(--border)", padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:20, fontWeight:700, color:"var(--ink)" }}>SMS Detected 📱</div>
@@ -329,11 +322,7 @@ export default function DetectedTransactions() {
               <span className="pulse" style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
               Auto-refreshing
             </div>
-            <button onClick={() => { setSpinning(true); load(); }} style={{
-              display:"flex", alignItems:"center", gap:6, padding:"7px 14px",
-              borderRadius:7, border:"1px solid var(--border)", background:"var(--surface)",
-              color:"var(--ink2)", fontSize:12, fontWeight:500, cursor:"pointer", fontFamily:"inherit",
-            }}>
+            <button onClick={() => { setSpinning(true); load(); }} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", borderRadius:7, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--ink2)", fontSize:12, fontWeight:500, cursor:"pointer", fontFamily:"inherit" }}>
               <span style={{ display:"inline-block", animation: spinning?"spin .7s linear infinite":"none" }}>
                 <Icon d={ICONS.refresh} size={13} />
               </span>
@@ -343,15 +332,12 @@ export default function DetectedTransactions() {
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", background:"var(--bg)" }}>
-
-          {/* Error */}
           {error && (
             <div className="fade" style={{ marginBottom:16, padding:"12px 16px", borderRadius:8, background:"var(--red-bg)", border:"1px solid #fecaca", color:"var(--red)", fontSize:13 }}>
               ⚠️ {error}
             </div>
           )}
 
-          {/* How it works — shown only when there are transactions */}
           {pending.length > 0 && (
             <div className="fade" style={{ marginBottom:20, padding:"12px 16px", borderRadius:9, background:"var(--blue-bg)", border:"1px solid #bfdbfe", display:"flex", alignItems:"center", gap:12 }}>
               <Icon d={ICONS.sms} size={18} color="var(--blue)" />
@@ -362,7 +348,6 @@ export default function DetectedTransactions() {
             </div>
           )}
 
-          {/* Empty state */}
           {pending.length === 0 && !error ? (
             <div className="fade" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"56px 20px", textAlign:"center", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
               <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
@@ -386,7 +371,6 @@ export default function DetectedTransactions() {
               ))}
             </div>
           )}
-
         </div>
       </div>
     </div>
