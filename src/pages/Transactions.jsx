@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// ─── Shared design system ─────────────────────────────────────────────────────
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -57,9 +56,12 @@ function injectCSS() {
 const fmt = n => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
 const isAutoTx = t => t.is_auto === true || t.is_auto === 1 || t.is_auto === "true" || t.is_auto === "1";
 
-const CAT_EMOJI = { Food:"🍜", Transport:"🚗", Shopping:"🛍️", Entertainment:"🎬", Health:"💊", Utilities:"⚡", Groceries:"🛒", Coffee:"☕", Books:"📚", Bills:"📃", Travel:"✈️", Medicine:"💊", Other:"💳" };
+const CAT_EMOJI = {
+  Food:"🍜", Transport:"🚗", Shopping:"🛍️", Entertainment:"🎬",
+  Health:"💊", Utilities:"⚡", Groceries:"🛒", Coffee:"☕",
+  Books:"📚", Bills:"📃", Travel:"✈️", Medicine:"💊", Other:"💳",
+};
 
-// ─── Icon ─────────────────────────────────────────────────────────────────────
 const Icon = ({ d, size = 14, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,7 +82,6 @@ const ICONS = {
   x:        "M18 6L6 18M6 6l12 12",
 };
 
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
 const NAV_SECTIONS = [
   { label: null, items: [{ to:"/dashboard", label:"Home", icon:"home" }] },
   {
@@ -136,7 +137,20 @@ function Sidebar({ onLogout }) {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// Format datetime nicely
+function fmtDateTime(raw) {
+  if (!raw) return "—";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+    const [y,m,d] = raw.split("-");
+    return new Date(+y,+m-1,+d).toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
+  }
+  const utc = (raw.endsWith("Z") || raw.includes("+")) ? raw : raw.replace(" ","T") + "Z";
+  return new Date(utc).toLocaleString("en-IN", {
+    day:"2-digit", month:"short", year:"numeric",
+    hour:"2-digit", minute:"2-digit", hour12:true,
+  });
+}
+
 export default function Transactions() {
   injectCSS();
   const navigate   = useNavigate();
@@ -168,7 +182,6 @@ export default function Transactions() {
       const r = await fetch(`${API}/api/expenses/`, { headers:{ Authorization:`Bearer ${token}` } });
       if (!r.ok) { localStorage.removeItem("token"); navigate("/", { replace:true }); return; }
       const data = await r.json();
-      // Sort by id desc (newest first); fallback to created_at/date
       data.sort((a, b) => {
         if (b.id && a.id && b.id !== a.id) return b.id - a.id;
         const da = new Date((a.created_at || a.date || "").replace(" ","T") + "Z");
@@ -187,7 +200,10 @@ export default function Transactions() {
 
   function applyFilters() {
     let list = [...all];
-    if (search)   list = list.filter(t => t.category?.toLowerCase().includes(search.toLowerCase()));
+    if (search)   list = list.filter(t =>
+      t.category?.toLowerCase().includes(search.toLowerCase()) ||
+      t.merchant?.toLowerCase().includes(search.toLowerCase())
+    );
     if (category) list = list.filter(t => t.category === category);
     if (date)     list = list.filter(t => new Date(t.date).toLocaleDateString("en-CA") === date);
     setFiltered(list);
@@ -198,7 +214,6 @@ export default function Transactions() {
 
   function logout() { localStorage.removeItem("token"); navigate("/", { replace:true }); }
 
-  // Stats
   const autoCount   = filtered.filter(isAutoTx).length;
   const manualCount = filtered.length - autoCount;
   const totalAmt    = filtered.reduce((s,t) => s + t.amount, 0);
@@ -211,6 +226,10 @@ export default function Transactions() {
       </div>
     </div>
   );
+
+  // Grid: icon | category+merchant | amount | datetime | type
+  const COLS = "44px 1fr 110px 180px 90px";
+  const HEADERS = ["", "Category & Merchant", "Amount", "Date & Time", "Type"];
 
   return (
     <div style={{ display:"flex", minHeight:"100vh" }}>
@@ -231,13 +250,7 @@ export default function Transactions() {
                 Synced {lastSync.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit", second:"2-digit" })}
               </div>
             )}
-            <button onClick={manualRefresh} style={{
-              display:"flex", alignItems:"center", gap:6,
-              padding:"7px 14px", borderRadius:7,
-              border:"1px solid var(--border)", background:"var(--surface)",
-              color:"var(--ink2)", fontSize:12, fontWeight:500,
-              cursor:"pointer", fontFamily:"inherit",
-            }}>
+            <button onClick={manualRefresh} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", borderRadius:7, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--ink2)", fontSize:12, fontWeight:500, cursor:"pointer", fontFamily:"inherit" }}>
               <span style={{ display:"inline-block", animation: spinning?"spin .7s linear infinite":"none" }}>
                 <Icon d={ICONS.refresh} size={13} />
               </span>
@@ -251,8 +264,8 @@ export default function Transactions() {
           {/* Stats row */}
           <div className="fade" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
             {[
-              { label:"Total transactions shown", val: filtered.length, sub:"matching your filters",   col:"var(--ink)",   bg:"var(--surface)" },
-              { label:"Detected from SMS automatically", val: autoCount, sub:"saved you time logging",  col:"var(--blue)",  bg:"var(--blue-bg)"  },
+              { label:"Total transactions shown", val: filtered.length, sub:"matching your filters",    col:"var(--ink)",   bg:"var(--surface)" },
+              { label:"Detected from SMS automatically", val: autoCount,   sub:"saved you time logging",  col:"var(--blue)",  bg:"var(--blue-bg)"  },
               { label:"Added by you manually",           val: manualCount, sub:"you logged these yourself", col:"var(--amber)", bg:"var(--amber-bg)" },
             ].map(s => (
               <div key={s.label} style={{ background:s.bg, border:"1px solid var(--border)", borderRadius:10, padding:"16px 20px", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
@@ -265,37 +278,23 @@ export default function Transactions() {
 
           {/* Filter bar */}
           <div className="f1" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, padding:"14px 18px", marginBottom:16, display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
-            {/* Search */}
             <div style={{ position:"relative", flex:1, minWidth:160 }}>
               <span style={{ position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
                 <Icon d={ICONS.search} size={13} color="var(--ink4)" />
               </span>
-              <input placeholder="Search by category…" value={search} onChange={e=>setSearch(e.target.value)}
+              <input placeholder="Search by category or merchant…" value={search} onChange={e=>setSearch(e.target.value)}
                 className="inp" style={{ paddingLeft:30, width:"100%" }} />
             </div>
-
-            {/* Category */}
             <select value={category} onChange={e=>setCategory(e.target.value)} className="inp" style={{ minWidth:150 }}>
               <option value="">All categories</option>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-
-            {/* Date */}
             <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="inp" />
-
-            {/* Clear */}
             {hasFilters && (
-              <button onClick={clearFilters} style={{
-                display:"flex", alignItems:"center", gap:5,
-                padding:"8px 12px", borderRadius:7,
-                background:"var(--red-bg)", border:"1px solid #fecaca",
-                color:"var(--red)", fontSize:12, fontWeight:500,
-                cursor:"pointer", fontFamily:"inherit",
-              }}>
+              <button onClick={clearFilters} style={{ display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:7, background:"var(--red-bg)", border:"1px solid #fecaca", color:"var(--red)", fontSize:12, fontWeight:500, cursor:"pointer", fontFamily:"inherit" }}>
                 <Icon d={ICONS.x} size={12} color="var(--red)" /> Clear filters
               </button>
             )}
-
             <div style={{ fontSize:11, color:"var(--ink4)", marginLeft:"auto", whiteSpace:"nowrap" }}>
               {filtered.length} of {all.length} shown · Total: ₹{fmt(totalAmt)}
             </div>
@@ -305,8 +304,8 @@ export default function Transactions() {
           <div className="f2" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
 
             {/* Column headers */}
-            <div style={{ display:"grid", gridTemplateColumns:"44px 1fr 110px 140px 90px", padding:"8px 20px", background:"#f9fafb", borderBottom:"1px solid var(--border)" }}>
-              {["","Category","Amount","Date & Time","Type"].map(h => (
+            <div style={{ display:"grid", gridTemplateColumns:COLS, padding:"8px 20px", background:"#f9fafb", borderBottom:"1px solid var(--border)" }}>
+              {HEADERS.map(h => (
                 <div key={h} style={{ fontSize:11, fontWeight:600, color:"var(--ink3)", textTransform:"uppercase", letterSpacing:".5px" }}>{h}</div>
               ))}
             </div>
@@ -326,32 +325,42 @@ export default function Transactions() {
               </div>
             ) : filtered.map((t, i) => {
               const auto = isAutoTx(t);
+              // merchant: try multiple field names the API might use
+              const merchant = t.merchant || t.merchant_name || t.description || null;
+              const dateStr  = fmtDateTime(t.created_at || t.date);
+
               return (
                 <div key={t.id||i} className="txrow" style={{
-                  display:"grid", gridTemplateColumns:"44px 1fr 110px 140px 90px",
+                  display:"grid", gridTemplateColumns:COLS,
                   padding:"11px 20px", alignItems:"center",
                   borderBottom: i < filtered.length-1 ? "1px solid var(--border)" : "none",
                   borderLeft: `3px solid ${auto ? "var(--blue)" : "transparent"}`,
                 }}>
+
                   {/* Emoji icon */}
-                  <div style={{ width:30, height:30, borderRadius:7, background: auto?"var(--blue-bg)":"#f5f3ff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>
+                  <div style={{ width:32, height:32, borderRadius:8, background: auto?"var(--blue-bg)":"#f5f3ff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>
                     {CAT_EMOJI[t.category] || "💳"}
                   </div>
 
-                  {/* Category */}
-                  <div style={{ fontSize:13, fontWeight:500, color:"var(--ink)" }}>{t.category}</div>
+                  {/* Category + Merchant */}
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{t.category || "—"}</div>
+                    {merchant && (
+                      <div style={{ fontSize:11, color:"var(--ink4)", marginTop:2 }}>{merchant}</div>
+                    )}
+                  </div>
 
                   {/* Amount */}
-                  <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>₹{fmt(t.amount)}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"var(--ink)" }}>₹{fmt(t.amount)}</div>
 
-                  {/* Date */}
-                  <div style={{ fontSize:12, color:"var(--ink3)" }}>{t.date?.slice(0,10)}</div>
+                  {/* Date & Time */}
+                  <div style={{ fontSize:12, color:"var(--ink3)" }}>{dateStr}</div>
 
-                  {/* Badge */}
+                  {/* Type badge */}
                   <div>
                     <span className="badge" style={{
-                      background: auto ? "var(--blue-bg)" : "var(--amber-bg)",
-                      color:      auto ? "var(--blue)"   : "var(--amber)",
+                      background: auto ? "var(--blue-bg)"  : "var(--amber-bg)",
+                      color:      auto ? "var(--blue)"     : "var(--amber)",
                       border:    `1px solid ${auto ? "#bfdbfe" : "#fde68a"}`,
                       fontSize:10,
                     }}>
@@ -363,7 +372,6 @@ export default function Transactions() {
             })}
           </div>
 
-          {/* Auto-refresh note */}
           <div style={{ textAlign:"center", marginTop:12, fontSize:11, color:"var(--ink4)", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
             <span className="pulse" style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
             Automatically updates every 5 seconds — you don't need to refresh manually
