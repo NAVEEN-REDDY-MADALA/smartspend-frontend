@@ -30,9 +30,11 @@ const CSS = `
   html, body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-  @keyframes spin   { to { transform:rotate(360deg); } }
-  @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes fadeIn    { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes spin      { to { transform:rotate(360deg); } }
+  @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:.4} }
+  @keyframes slideRight{ from{transform:translateX(100%)} to{transform:translateX(0)} }
+  @keyframes fadeBack  { from{opacity:0} to{opacity:1} }
   .fade { animation: fadeIn .3s ease both; }
   .f1   { animation: fadeIn .3s .05s ease both; }
   .f2   { animation: fadeIn .3s .10s ease both; }
@@ -41,10 +43,13 @@ const CSS = `
   .slink.active{ background: var(--sidebar-active) !important; color: #fff !important; }
   .inp { padding:8px 12px; border-radius:7px; border:1px solid var(--border); font-size:13px; font-family:inherit; color:var(--ink); outline:none; background:var(--surface); transition:border-color .15s; }
   .inp:focus { border-color: var(--accent); }
-  .txrow { transition: background .12s; }
-  .txrow:hover { background: #f9fafb !important; }
+  .txrow { transition: background .12s; cursor: pointer; }
+  .txrow:hover { background: #f0f4ff !important; }
+  .txrow.selected { background: #eff6ff !important; }
   .badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:500; }
-  .pulse { animation: pulse 2s infinite; }
+  .pulse   { animation: pulse 2s infinite; }
+  .drawer  { animation: slideRight .22s ease both; }
+  .overlay { animation: fadeBack .2s ease both; }
 `;
 
 function injectCSS() {
@@ -137,7 +142,6 @@ function Sidebar({ onLogout }) {
   );
 }
 
-// Format datetime nicely
 function fmtDateTime(raw) {
   if (!raw) return "—";
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
@@ -151,10 +155,135 @@ function fmtDateTime(raw) {
   });
 }
 
+// ── Detail Drawer ─────────────────────────────────────────────────────────────
+function DetailDrawer({ txn, onClose }) {
+  if (!txn) return null;
+  const auto     = isAutoTx(txn);
+  const merchant = txn.merchant || txn.merchant_name || txn.description || null;
+  const dateStr  = fmtDateTime(txn.created_at || txn.date);
+
+  const rows = [
+    { emoji:"🏷️", label:"Category",        value: txn.category || "—"                               },
+    { emoji:"🏪", label:"Merchant / Paid to",value: merchant || "—"                                   },
+    { emoji:"💰", label:"Amount",            value: "Rs." + fmt(txn.amount)                            },
+    { emoji:"📅", label:"Date & Time",       value: dateStr                                            },
+    { emoji:"📲", label:"Source",            value: auto ? "Auto-detected from SMS" : "Added manually" },
+    { emoji:"🔢", label:"Transaction ID",    value: "#" + txn.id                                       },
+  ];
+
+  return (
+    <>
+      <div className="overlay" onClick={onClose} style={{
+        position:"fixed", inset:0, background:"rgba(17,24,39,.4)",
+        zIndex:100, backdropFilter:"blur(2px)",
+      }} />
+      <div className="drawer" style={{
+        position:"fixed", top:0, right:0, bottom:0, width:380,
+        background:"var(--surface)", zIndex:101,
+        boxShadow:"-8px 0 40px rgba(0,0,0,.15)",
+        display:"flex", flexDirection:"column",
+      }}>
+        <div style={{ padding:"18px 22px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:15, fontWeight:700, color:"var(--ink)" }}>Transaction Details</div>
+          <button onClick={onClose} style={{ width:30, height:30, borderRadius:7, border:"1px solid var(--border)", background:"var(--bg)", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <Icon d={ICONS.x} size={13} color="var(--ink3)" />
+          </button>
+        </div>
+
+        {/* Hero */}
+        <div style={{
+          margin:"18px 22px 0", padding:"22px", borderRadius:14, textAlign:"center",
+          background: auto ? "linear-gradient(135deg,#eff6ff,#dbeafe)" : "linear-gradient(135deg,#faf5ff,#ede9fe)",
+          border:`1px solid ${auto ? "#bfdbfe" : "#ddd6fe"}`,
+        }}>
+          <div style={{ fontSize:38, marginBottom:8 }}>{CAT_EMOJI[txn.category] || "💳"}</div>
+          <div style={{ fontSize:32, fontWeight:800, color:"var(--ink)", marginBottom:4 }}>Rs.{fmt(txn.amount)}</div>
+          <div style={{ fontSize:13, color:"var(--ink3)", marginBottom:10 }}>
+            {txn.category}{merchant ? " · " + merchant : ""}
+          </div>
+          <span style={{
+            display:"inline-flex", alignItems:"center", gap:5,
+            padding:"4px 12px", borderRadius:99, fontSize:11, fontWeight:600,
+            background: auto ? "var(--blue-bg)" : "var(--amber-bg)",
+            color: auto ? "var(--blue)" : "var(--amber)",
+            border:`1px solid ${auto ? "#bfdbfe" : "#fde68a"}`,
+          }}>
+            {auto ? "Auto from SMS" : "Manual entry"}
+          </span>
+        </div>
+
+        {/* Rows */}
+        <div style={{ flex:1, overflowY:"auto", padding:"16px 22px" }}>
+          {rows.map((row, i) => (
+            <div key={row.label} style={{
+              display:"flex", justifyContent:"space-between", alignItems:"center",
+              padding:"13px 0",
+              borderBottom: i < rows.length-1 ? "1px solid var(--border)" : "none",
+            }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ fontSize:16 }}>{row.emoji}</span>
+                <span style={{ fontSize:12, color:"var(--ink3)", fontWeight:500 }}>{row.label}</span>
+              </div>
+              <span style={{ fontSize:13, fontWeight:600, color:"var(--ink)", textAlign:"right", maxWidth:200, wordBreak:"break-word" }}>
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding:"14px 22px", borderTop:"1px solid var(--border)" }}>
+          <button onClick={onClose} style={{ width:"100%", padding:"11px", borderRadius:9, background:"var(--accent)", border:"none", color:"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+            Close
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Summary Bar ───────────────────────────────────────────────────────────────
+function SummaryBar({ filtered, totalAmt, date, category }) {
+  const topCatMap = {};
+  filtered.forEach(t => { topCatMap[t.category] = (topCatMap[t.category]||0) + t.amount; });
+  const topCat    = Object.entries(topCatMap).sort((a,b) => b[1]-a[1])[0];
+  const autoTxns  = filtered.filter(isAutoTx);
+  const autoAmt   = autoTxns.reduce((s,t) => s+t.amount, 0);
+  const manualAmt = totalAmt - autoAmt;
+
+  const label = date
+    ? new Date(date + "T00:00:00").toLocaleDateString("en-IN", { weekday:"long", day:"2-digit", month:"long", year:"numeric" })
+    : category || "Filtered results";
+
+  const cards = [
+    { label:"Total Spent",  value:"Rs."+fmt(totalAmt),    sub: filtered.length + " transaction" + (filtered.length!==1?"s":"") },
+    { label:"Top Category", value: topCat ? (CAT_EMOJI[topCat[0]]||"") + " " + topCat[0] : "—", sub: topCat ? "Rs."+fmt(topCat[1]) : "" },
+    { label:"Auto (SMS)",   value:"Rs."+fmt(autoAmt),     sub: autoTxns.length + " txn" + (autoTxns.length!==1?"s":"")         },
+    { label:"Manual",       value:"Rs."+fmt(manualAmt),   sub: (filtered.length - autoTxns.length) + " txn" + ((filtered.length-autoTxns.length)!==1?"s":"") },
+  ];
+
+  return (
+    <div className="fade" style={{ marginBottom:16, background:"linear-gradient(135deg,#2d1b69,#4c3494)", borderRadius:12, padding:"18px 22px" }}>
+      <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,.55)", marginBottom:12, textTransform:"uppercase", letterSpacing:"1.2px" }}>
+        Spending Summary &mdash; {label}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+        {cards.map(c => (
+          <div key={c.label} style={{ background:"rgba(255,255,255,.1)", borderRadius:9, padding:"12px 14px" }}>
+            <div style={{ fontSize:10, color:"rgba(255,255,255,.55)", marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:".5px" }}>{c.label}</div>
+            <div style={{ fontSize:17, fontWeight:700, color:"#fff", marginBottom:2 }}>{c.value}</div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,.45)" }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function Transactions() {
   injectCSS();
-  const navigate   = useNavigate();
-  const token      = localStorage.getItem("token");
+  const navigate = useNavigate();
+  const token    = localStorage.getItem("token");
 
   const [all, setAll]           = useState([]);
   const [filtered, setFiltered] = useState([]);
@@ -164,6 +293,7 @@ export default function Transactions() {
   const [loading, setLoading]   = useState(true);
   const [lastSync, setLastSync] = useState(null);
   const [spinning, setSpinning] = useState(false);
+  const [selected, setSelected] = useState(null);
 
   const CATEGORIES = ["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Other"];
   const API = "https://smartspend-backend-aupt.onrender.com";
@@ -190,10 +320,7 @@ export default function Transactions() {
       });
       setAll(data);
       setLastSync(new Date());
-    } finally {
-      setLoading(false);
-      setSpinning(false);
-    }
+    } finally { setLoading(false); setSpinning(false); }
   }
 
   function manualRefresh() { setSpinning(true); load(); }
@@ -211,7 +338,6 @@ export default function Transactions() {
 
   function clearFilters() { setSearch(""); setCategory(""); setDate(""); }
   const hasFilters = search || category || date;
-
   function logout() { localStorage.removeItem("token"); navigate("/", { replace:true }); }
 
   const autoCount   = filtered.filter(isAutoTx).length;
@@ -227,25 +353,23 @@ export default function Transactions() {
     </div>
   );
 
-  // Grid: icon | category+merchant | amount | datetime | type
-  const COLS = "44px 1fr 110px 180px 90px";
-  const HEADERS = ["", "Category & Merchant", "Amount", "Date & Time", "Type"];
+  const COLS    = "44px 130px 1fr 100px 190px 95px";
+  const HEADERS = ["", "Category", "Merchant", "Amount", "Date & Time", "Type"];
 
   return (
     <div style={{ display:"flex", minHeight:"100vh" }}>
       <Sidebar onLogout={logout} />
+      <DetailDrawer txn={selected} onClose={() => setSelected(null)} />
 
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-
-        {/* Header */}
         <div style={{ background:"var(--surface)", borderBottom:"1px solid var(--border)", padding:"16px 28px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
-            <div style={{ fontSize:20, fontWeight:700, color:"var(--ink)" }}>My Transactions 💸</div>
-            <div style={{ fontSize:13, color:"var(--ink3)", marginTop:2 }}>Every rupee you've spent, all in one place</div>
+            <div style={{ fontSize:20, fontWeight:700, color:"var(--ink)" }}>My Transactions</div>
+            <div style={{ fontSize:13, color:"var(--ink3)", marginTop:2 }}>Click any row to see full details</div>
           </div>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
             {lastSync && (
-              <div style={{ fontSize:11, color:"var(--ink4)", textAlign:"right" }}>
+              <div style={{ fontSize:11, color:"var(--ink4)" }}>
                 <span style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"var(--green)", marginRight:5 }} className="pulse" />
                 Synced {lastSync.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit", second:"2-digit" })}
               </div>
@@ -261,12 +385,12 @@ export default function Transactions() {
 
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px", background:"var(--bg)" }}>
 
-          {/* Stats row */}
+          {/* Stats */}
           <div className="fade" style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:20 }}>
             {[
-              { label:"Total transactions shown", val: filtered.length, sub:"matching your filters",    col:"var(--ink)",   bg:"var(--surface)" },
-              { label:"Detected from SMS automatically", val: autoCount,   sub:"saved you time logging",  col:"var(--blue)",  bg:"var(--blue-bg)"  },
-              { label:"Added by you manually",           val: manualCount, sub:"you logged these yourself", col:"var(--amber)", bg:"var(--amber-bg)" },
+              { label:"Total transactions shown",        val:filtered.length, sub:"matching your filters",     col:"var(--ink)",   bg:"var(--surface)" },
+              { label:"Detected from SMS automatically", val:autoCount,       sub:"saved you time logging",    col:"var(--blue)",  bg:"var(--blue-bg)"  },
+              { label:"Added by you manually",           val:manualCount,     sub:"you logged these yourself", col:"var(--amber)", bg:"var(--amber-bg)" },
             ].map(s => (
               <div key={s.label} style={{ background:s.bg, border:"1px solid var(--border)", borderRadius:10, padding:"16px 20px", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
                 <div style={{ fontSize:11, fontWeight:600, color:"var(--ink3)", marginBottom:8 }}>{s.label}</div>
@@ -296,14 +420,22 @@ export default function Transactions() {
               </button>
             )}
             <div style={{ fontSize:11, color:"var(--ink4)", marginLeft:"auto", whiteSpace:"nowrap" }}>
-              {filtered.length} of {all.length} shown · Total: ₹{fmt(totalAmt)}
+              {filtered.length} of {all.length} shown · Total: Rs.{fmt(totalAmt)}
             </div>
           </div>
 
+          {/* Smart Summary Bar — only when filter active and results exist */}
+          {hasFilters && filtered.length > 0 && (
+            <SummaryBar
+              filtered={filtered}
+              totalAmt={totalAmt}
+              date={date}
+              category={category}
+            />
+          )}
+
           {/* Table */}
           <div className="f2" style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:10, overflow:"hidden", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
-
-            {/* Column headers */}
             <div style={{ display:"grid", gridTemplateColumns:COLS, padding:"8px 20px", background:"#f9fafb", borderBottom:"1px solid var(--border)" }}>
               {HEADERS.map(h => (
                 <div key={h} style={{ fontSize:11, fontWeight:600, color:"var(--ink3)", textTransform:"uppercase", letterSpacing:".5px" }}>{h}</div>
@@ -324,39 +456,39 @@ export default function Transactions() {
                 )}
               </div>
             ) : filtered.map((t, i) => {
-              const auto = isAutoTx(t);
-              // merchant: try multiple field names the API might use
-              const merchant = t.merchant || t.merchant_name || t.description || null;
-              const dateStr  = fmtDateTime(t.created_at || t.date);
+              const auto       = isAutoTx(t);
+              const merchant   = t.merchant || t.merchant_name || t.description || null;
+              const dateStr    = fmtDateTime(t.created_at || t.date);
+              const isSelected = selected?.id === t.id;
 
               return (
-                <div key={t.id||i} className="txrow" style={{
-                  display:"grid", gridTemplateColumns:COLS,
-                  padding:"11px 20px", alignItems:"center",
-                  borderBottom: i < filtered.length-1 ? "1px solid var(--border)" : "none",
-                  borderLeft: `3px solid ${auto ? "var(--blue)" : "transparent"}`,
-                }}>
+                <div key={t.id||i}
+                  className={`txrow${isSelected ? " selected" : ""}`}
+                  onClick={() => setSelected(isSelected ? null : t)}
+                  style={{
+                    display:"grid", gridTemplateColumns:COLS,
+                    padding:"11px 20px", alignItems:"center",
+                    borderBottom: i < filtered.length-1 ? "1px solid var(--border)" : "none",
+                    borderLeft: `3px solid ${auto ? "var(--blue)" : "transparent"}`,
+                  }}>
 
-                  {/* Emoji icon */}
-                  <div style={{ width:32, height:32, borderRadius:8, background: auto?"var(--blue-bg)":"#f5f3ff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>
+                  <div style={{ width:32, height:32, borderRadius:8, background:auto?"var(--blue-bg)":"#f5f3ff", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>
                     {CAT_EMOJI[t.category] || "💳"}
                   </div>
 
-                  {/* Category + Merchant */}
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{t.category || "—"}</div>
-                    {merchant && (
-                      <div style={{ fontSize:11, color:"var(--ink4)", marginTop:2 }}>{merchant}</div>
-                    )}
+                  <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)" }}>{t.category || "—"}</div>
+
+                  <div style={{ fontSize:13, color:"var(--ink3)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                    {merchant || <span style={{ color:"var(--ink4)", fontStyle:"italic" }}>—</span>}
                   </div>
 
-                  {/* Amount */}
-                  <div style={{ fontSize:13, fontWeight:700, color:"var(--ink)" }}>₹{fmt(t.amount)}</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:"var(--ink)" }}>Rs.{fmt(t.amount)}</div>
 
-                  {/* Date & Time */}
-                  <div style={{ fontSize:12, color:"var(--ink3)" }}>{dateStr}</div>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:500, color:"var(--ink2)" }}>{dateStr.split(",")[0]}</div>
+                    <div style={{ fontSize:11, color:"var(--ink4)", marginTop:1 }}>{dateStr.split(",").slice(1).join(",").trim()}</div>
+                  </div>
 
-                  {/* Type badge */}
                   <div>
                     <span className="badge" style={{
                       background: auto ? "var(--blue-bg)"  : "var(--amber-bg)",
@@ -364,7 +496,7 @@ export default function Transactions() {
                       border:    `1px solid ${auto ? "#bfdbfe" : "#fde68a"}`,
                       fontSize:10,
                     }}>
-                      {auto ? "🤖 Auto" : "✍️ Manual"}
+                      {auto ? "Auto" : "Manual"}
                     </span>
                   </div>
                 </div>
@@ -374,9 +506,8 @@ export default function Transactions() {
 
           <div style={{ textAlign:"center", marginTop:12, fontSize:11, color:"var(--ink4)", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
             <span className="pulse" style={{ display:"inline-block", width:6, height:6, borderRadius:"50%", background:"var(--green)" }} />
-            Automatically updates every 5 seconds — you don't need to refresh manually
+            Auto-updates every 5 seconds · Click any row for full details
           </div>
-
         </div>
       </div>
     </div>

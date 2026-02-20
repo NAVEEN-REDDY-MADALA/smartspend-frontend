@@ -53,6 +53,91 @@ const fmtK = n => n>=1000?`${(n/1000).toFixed(1)}k`:fmt(n);
 const MON  = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtM = m => { if(!m) return ""; const [y,mo]=m.split("-"); return `${MON[+mo]} '${y.slice(2)}`; };
 
+// ─── Smart Rules-Based Prediction Engine ─────────────────────────────────────
+// Combines 4 signals: weighted moving average, linear trend, day-of-month pace,
+// and seasonal factor (same month last year). Weights adjust based on data available.
+function predictNextMonth(history) {
+  const months = Object.keys(history).sort();
+  const n = months.length;
+  if (n === 0) return { value: 0, confidence: "Low", method: "No data", factors: [], trendAmt: 0 };
+
+  const vals = months.map(m => history[m]);
+
+  // Rule 1: Weighted Moving Average — recent months weighted more
+  const wts = [0.50, 0.30, 0.15, 0.05];
+  let wSum = 0, wTot = 0;
+  for (let i = 0; i < Math.min(4, n); i++) {
+    wSum += vals[n - 1 - i] * wts[i];
+    wTot += wts[i];
+  }
+  const wma = wSum / wTot;
+
+  // Rule 2: Linear Trend via least-squares slope on last 4 months
+  let slope = 0;
+  if (n >= 2) {
+    const slice = vals.slice(-Math.min(4, n));
+    const xm = (slice.length - 1) / 2;
+    const ym = slice.reduce((a,b) => a+b, 0) / slice.length;
+    let num = 0, den = 0;
+    slice.forEach((y, x) => { num += (x - xm) * (y - ym); den += (x - xm) ** 2; });
+    slope = den !== 0 ? num / den : 0;
+  }
+  const trendProjection = wma + slope; // one step ahead
+
+  // Rule 3: Current month pace extrapolation
+  const now = new Date();
+  const curKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  let paceProjection = null;
+  let daysElapsed = 0;
+  if (months[n-1] === curKey && history[curKey]) {
+    daysElapsed = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    if (daysElapsed >= 4) {
+      paceProjection = (history[curKey] / daysElapsed) * daysInMonth;
+    }
+  }
+
+  // Rule 4: Same month last year (seasonal signal)
+  const nextDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const sameLastYear = `${nextDate.getFullYear()-1}-${String(nextDate.getMonth()+1).padStart(2,"0")}`;
+  const seasonal = history[sameLastYear] || null;
+
+  // Combine signals — weight by data confidence
+  let prediction = 0;
+  const factors = [];
+
+  if (paceProjection && months[n-1] === curKey) {
+    prediction = paceProjection * 0.50 + trendProjection * 0.35 + (seasonal ? seasonal * 0.15 : trendProjection * 0.15);
+    factors.push({ label: "Current month pace", value: Math.round(paceProjection), weight: "50%", note: `Day ${daysElapsed} of this month extrapolated to full month` });
+    factors.push({ label: "Trend projection", value: Math.round(trendProjection), weight: "35%", note: slope > 50 ? "Rising trend detected" : slope < -50 ? "Falling trend detected" : "Stable trend" });
+    if (seasonal) factors.push({ label: "Same month last year", value: Math.round(seasonal), weight: "15%", note: "Seasonal pattern from last year" });
+    else factors.push({ label: "Trend (seasonal fallback)", value: Math.round(trendProjection), weight: "15%", note: "No last year data available" });
+  } else if (n >= 3) {
+    prediction = trendProjection * 0.60 + wma * 0.30 + (seasonal ? seasonal * 0.10 : trendProjection * 0.10);
+    factors.push({ label: "Trend projection", value: Math.round(trendProjection), weight: "60%", note: `Slope: ${slope > 0 ? "+" : ""}${fmt(Math.round(slope))}/month` });
+    factors.push({ label: "Weighted avg (last 4mo)", value: Math.round(wma), weight: "30%", note: "Recent months weighted 50/30/15/5%" });
+    if (seasonal) factors.push({ label: "Seasonal pattern", value: Math.round(seasonal), weight: "10%", note: "Same month last year" });
+  } else if (n === 2) {
+    prediction = trendProjection * 0.70 + wma * 0.30;
+    factors.push({ label: "Trend projection", value: Math.round(trendProjection), weight: "70%", note: "Based on 2 months of data" });
+    factors.push({ label: "Weighted average", value: Math.round(wma), weight: "30%", note: "Recent months" });
+  } else {
+    prediction = wma;
+    factors.push({ label: "Single month baseline", value: Math.round(wma), weight: "100%", note: "Need more months for better accuracy" });
+  }
+
+  // Sanity clamp: max 3x highest month, min 20% of lowest
+  const maxVal = Math.max(...vals);
+  const minVal = Math.min(...vals);
+  prediction = Math.max(minVal * 0.2, Math.min(prediction, maxVal * 3));
+  prediction = Math.max(0, Math.round(prediction));
+
+  const confidence = n >= 4 ? "High" : n >= 2 ? "Medium" : "Low";
+  const method = paceProjection ? "Pace + Trend + Seasonal" : n >= 3 ? "Trend + Weighted Avg" : "Weighted Average";
+
+  return { value: prediction, confidence, method, factors, trendAmt: Math.round(slope) };
+}
+
 const Icon = ({d,size=14,color="currentColor"}) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>
 );
@@ -118,7 +203,6 @@ function Sidebar({onLogout}) {
 const COLORS=["#7c5cbf","#a78bfa","#34d399","#60a5fa","#fb923c","#f472b6","#facc15","#38bdf8","#4ade80","#f87171"];
 const CAT_EMOJI={Food:"🍜",Groceries:"🛒",Transport:"🚗",Shopping:"🛍️",Entertainment:"🎬",Bills:"💡",Medicine:"💊",Travel:"✈️",Coffee:"☕",Books:"📚",Rent:"🏠",Other:"💳",Finance:"💳"};
 
-// Recommended student budget %
 const BUDGET_GUIDE=[
   {cat:"Food & Groceries",rec:35,keys:["Food","Groceries"],tip:"Cook at home, use college mess/canteen"},
   {cat:"Transport",rec:15,keys:["Transport","Travel"],tip:"Student bus pass, cycle for short distances"},
@@ -128,7 +212,7 @@ const BUDGET_GUIDE=[
   {cat:"Other",rec:20,keys:["Other","Shopping","Medicine","Finance"],tip:"Keep a buffer for unexpected expenses"},
 ];
 
-function getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent,months) {
+function getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent) {
   const ins=[];
   const daily=avgPerMonth/30;
   const food=(catTotals["Food"]||0)+(catTotals["Groceries"]||0);
@@ -136,19 +220,13 @@ function getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent,months) {
   const ent=catTotals["Entertainment"]||0;
   const entPct=totalSpent>0?ent/totalSpent*100:0;
   const top=catLabels[0];
-
   if(trend>20) ins.push({icon:"⚠️",title:"Spending jumped "+trend.toFixed(0)+"%!",body:"Your spending rose sharply vs last month. Check what changed in your top categories and set a limit.",color:"var(--red)",bg:"var(--red-bg)"});
   else if(trend<-10) ins.push({icon:"🎉",title:"You saved more this month!",body:`Spending dropped ${Math.abs(trend).toFixed(0)}% vs last month. Great discipline — keep it up!`,color:"var(--green)",bg:"var(--green-bg)"});
-
-  if(foodPct>45) ins.push({icon:"🍜",title:"Food is your biggest drain",body:`₹${fmt(food)} (${foodPct.toFixed(0)}%) on food. Cooking at home 3x/week could save ₹${fmt(Math.round(food*0.25))} monthly.`,color:"var(--amber)",bg:"var(--amber-bg)"});
-
-  ins.push({icon:"☀️",title:`Daily spend: ₹${fmt(Math.round(daily))}`,body:daily<200?"Excellent! Under ₹200/day is great for a student budget. 🌟":daily<400?"Decent! Try to keep under ₹300/day to save more.":"High daily spend. Targeting ₹300/day saves ₹"+(fmt(Math.round((daily-300)*30)))+"/month.",color:"var(--blue)",bg:"var(--blue-bg)"});
-
-  if(entPct>15) ins.push({icon:"🎬",title:"Entertainment spending high",body:`₹${fmt(ent)} (${entPct.toFixed(0)}%) on entertainment. Look for student discount codes, share OTT accounts with roommates.`,color:"var(--accent)",bg:"#f5f3ff"});
-
+  if(foodPct>45) ins.push({icon:"🍜",title:"Food is your biggest drain",body:`Rs.${fmt(food)} (${foodPct.toFixed(0)}%) on food. Cooking at home 3x/week could save Rs.${fmt(Math.round(food*0.25))} monthly.`,color:"var(--amber)",bg:"var(--amber-bg)"});
+  ins.push({icon:"☀️",title:`Daily spend: Rs.${fmt(Math.round(daily))}`,body:daily<200?"Excellent! Under Rs.200/day is great for a student budget.":daily<400?"Decent! Try to keep under Rs.300/day to save more.":"High daily spend. Targeting Rs.300/day saves Rs."+(fmt(Math.round((daily-300)*30)))+"/month.",color:"var(--blue)",bg:"var(--blue-bg)"});
+  if(entPct>15) ins.push({icon:"🎬",title:"Entertainment spending high",body:`Rs.${fmt(ent)} (${entPct.toFixed(0)}%) on entertainment. Look for student discount codes, share OTT accounts with roommates.`,color:"var(--accent)",bg:"#f5f3ff"});
   const saving=Math.round(avgPerMonth*0.15);
-  ins.push({icon:"💰",title:`Save ₹${fmt(saving)}/month potential`,body:`Cutting just 15% from "${top||"top category"}" = ₹${fmt(saving*12)}/year. That's a trip, laptop upgrade, or solid emergency fund!`,color:"var(--green)",bg:"var(--green-bg)"});
-
+  ins.push({icon:"💰",title:`Save Rs.${fmt(saving)}/month potential`,body:`Cutting just 15% from "${top||"top category"}" = Rs.${fmt(saving*12)}/year. That's a trip, laptop upgrade, or solid emergency fund!`,color:"var(--green)",bg:"var(--green-bg)"});
   return ins.slice(0,4);
 }
 
@@ -177,6 +255,7 @@ export default function Analytics() {
   const [history,setHistory]=useState({});
   const [loading,setLoading]=useState(true);
   const [tab,setTab]=useState("overview");
+  const [showBreakdown,setShowBreakdown]=useState(false);
 
   useEffect(()=>{ if(!token){navigate("/",{replace:true});return;} load(); },[]);
 
@@ -195,7 +274,6 @@ export default function Analytics() {
 
   function logout(){localStorage.removeItem("token");navigate("/",{replace:true});}
 
-  // Data prep
   const months=Object.keys(history).sort();
   const monthVals=months.map(m=>history[m]);
   const catTotals={};
@@ -212,33 +290,32 @@ export default function Analytics() {
   const score=healthScore(avgPerMonth,trend,catLabels,catTotals,totalSpent);
   const scoreColor=score>=75?"var(--green)":score>=50?"var(--amber)":"var(--red)";
   const scoreLabel=score>=75?"Healthy 🌟":score>=50?"Needs Attention ⚡":"At Risk ⚠️";
-  const insights=getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent,months);
+  const insights=getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent);
   const dailyAvg=avgPerMonth/30;
-  const prediction=avgPerMonth*(1+(trend/200));
 
-  // Weekday
+  // Smart prediction
+  const pred = predictNextMonth(history);
+  const confColor = pred.confidence==="High" ? "var(--green)" : pred.confidence==="Medium" ? "var(--amber)" : "var(--red)";
+  const confBg    = pred.confidence==="High" ? "var(--green-bg)" : pred.confidence==="Medium" ? "var(--amber-bg)" : "var(--red-bg)";
+
   const wdTotals=Array(7).fill(0);
   expenses.forEach(e=>{if(!e.date)return;wdTotals[new Date(e.date).getDay()]+=e.amount;});
   const wdLabels=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const peakDay=wdLabels[wdTotals.indexOf(Math.max(...wdTotals))];
 
-  // Chart defaults
   const scaleStyle={grid:{color:"rgba(0,0,0,.04)"},ticks:{font:{size:11,family:"Inter"}},border:{display:false}};
 
-  const lineData={
-    labels:months.map(fmtM),
-    datasets:[{label:"Spend",data:monthVals,borderColor:"#7c5cbf",backgroundColor:"rgba(124,92,191,.07)",fill:true,tension:.4,borderWidth:2.5,pointRadius:5,pointBackgroundColor:"#7c5cbf",pointBorderColor:"#fff",pointBorderWidth:2,pointHoverRadius:7}]
-  };
-  const lineOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{label:ctx=>`  ₹${fmt(ctx.parsed.y)}`}}},scales:{y:{...scaleStyle,beginAtZero:true,ticks:{...scaleStyle.ticks,callback:v=>`₹${fmtK(v)}`}},x:{...scaleStyle,grid:{display:false}}}};
+  const lineData={labels:months.map(fmtM),datasets:[{label:"Spend",data:monthVals,borderColor:"#7c5cbf",backgroundColor:"rgba(124,92,191,.07)",fill:true,tension:.4,borderWidth:2.5,pointRadius:5,pointBackgroundColor:"#7c5cbf",pointBorderColor:"#fff",pointBorderWidth:2,pointHoverRadius:7}]};
+  const lineOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{label:ctx=>`  Rs.${fmt(ctx.parsed.y)}`}}},scales:{y:{...scaleStyle,beginAtZero:true,ticks:{...scaleStyle.ticks,callback:v=>`Rs.${fmtK(v)}`}},x:{...scaleStyle,grid:{display:false}}}};
 
   const donutData={labels:catLabels,datasets:[{data:catData,backgroundColor:catLabels.map((_,i)=>COLORS[i%COLORS.length]),borderWidth:0,hoverOffset:10}]};
-  const donutOpts={responsive:true,maintainAspectRatio:false,cutout:"65%",plugins:{legend:{position:"right",labels:{padding:12,font:{size:11,family:"Inter"},usePointStyle:true,pointStyle:"circle",boxWidth:8}},tooltip:{...tooltipOpts,callbacks:{label:ctx=>{const t=catData.reduce((a,b)=>a+b,0);const pct=(ctx.parsed/t*100).toFixed(1);return `  ${ctx.label}: ₹${fmt(ctx.parsed)} (${pct}%)`;}}}}};
+  const donutOpts={responsive:true,maintainAspectRatio:false,cutout:"65%",plugins:{legend:{position:"right",labels:{padding:12,font:{size:11,family:"Inter"},usePointStyle:true,pointStyle:"circle",boxWidth:8}},tooltip:{...tooltipOpts,callbacks:{label:ctx=>{const t=catData.reduce((a,b)=>a+b,0);const pct=(ctx.parsed/t*100).toFixed(1);return `  ${ctx.label}: Rs.${fmt(ctx.parsed)} (${pct}%)`;}}}}};
 
   const wdBarData={labels:wdLabels,datasets:[{data:wdTotals,backgroundColor:wdTotals.map((v,i)=>i===wdTotals.indexOf(Math.max(...wdTotals))?"#7c5cbf":"rgba(124,92,191,.28)"),borderRadius:6,borderWidth:0}]};
-  const wdBarOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{label:ctx=>`  ₹${fmt(ctx.parsed.y)}`}}},scales:{y:{...scaleStyle,beginAtZero:true,ticks:{...scaleStyle.ticks,callback:v=>`₹${fmtK(v)}`}},x:{...scaleStyle,grid:{display:false}}}};
+  const wdBarOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{label:ctx=>`  Rs.${fmt(ctx.parsed.y)}`}}},scales:{y:{...scaleStyle,beginAtZero:true,ticks:{...scaleStyle.ticks,callback:v=>`Rs.${fmtK(v)}`}},x:{...scaleStyle,grid:{display:false}}}};
 
   const cmpData={labels:[prevMonth,curMonth].filter(Boolean).map(fmtM),datasets:[{data:[prevVal,curVal],backgroundColor:["rgba(124,92,191,.3)","#7c5cbf"],borderRadius:8,borderWidth:0}]};
-  const cmpOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{label:ctx=>`  ₹${fmt(ctx.parsed.y)}`}}},scales:{y:{...scaleStyle,beginAtZero:true,ticks:{...scaleStyle.ticks,callback:v=>`₹${fmtK(v)}`}},x:{...scaleStyle,grid:{display:false},ticks:{...scaleStyle.ticks,font:{size:12,family:"Inter",weight:"600"}}}}};
+  const cmpOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tooltipOpts,callbacks:{label:ctx=>`  Rs.${fmt(ctx.parsed.y)}`}}},scales:{y:{...scaleStyle,beginAtZero:true,ticks:{...scaleStyle.ticks,callback:v=>`Rs.${fmtK(v)}`}},x:{...scaleStyle,grid:{display:false},ticks:{...scaleStyle.ticks,font:{size:12,family:"Inter",weight:"600"}}}}};
 
   if(loading) return (
     <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}>
@@ -254,15 +331,13 @@ export default function Analytics() {
       <Sidebar onLogout={logout}/>
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-        {/* Header */}
         <div style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"16px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
-            <div style={{fontSize:20,fontWeight:700,color:"var(--ink)"}}>Analytics 📊</div>
+            <div style={{fontSize:20,fontWeight:700,color:"var(--ink)"}}>Analytics</div>
             <div style={{fontSize:13,color:"var(--ink3)",marginTop:2}}>Understand your money, make smarter decisions</div>
           </div>
-          {/* Health score pill */}
           <div style={{display:"flex",alignItems:"center",gap:10,background:"#f5f3ff",border:"1px solid #e0d9f7",borderRadius:12,padding:"10px 16px"}}>
-            <div style={{fontSize:26,fontWeight:700,color:scoreColor,fontVariantNumeric:"tabular-nums"}}>{score}</div>
+            <div style={{fontSize:26,fontWeight:700,color:scoreColor}}>{score}</div>
             <div>
               <div style={{fontSize:10,fontWeight:700,color:"var(--ink3)",textTransform:"uppercase",letterSpacing:"1px"}}>Budget Health</div>
               <div style={{fontSize:12,fontWeight:600,color:scoreColor}}>{scoreLabel}</div>
@@ -270,13 +345,8 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"0 28px",display:"flex"}}>
-          {[
-            {id:"overview",label:"📊 Overview"},
-            {id:"insights",label:"💡 Student Insights"},
-            {id:"breakdown",label:"🗂️ Full Breakdown"},
-          ].map(t=>(
+          {[{id:"overview",label:"Overview"},{id:"insights",label:"Student Insights"},{id:"breakdown",label:"Full Breakdown"}].map(t=>(
             <button key={t.id} className="tab-btn" onClick={()=>setTab(t.id)}
               style={{padding:"12px 16px",borderBottom:tab===t.id?"2px solid var(--accent)":"2px solid transparent",fontSize:13,fontWeight:tab===t.id?600:500,color:tab===t.id?"var(--accent)":"var(--ink3)"}}>
               {t.label}
@@ -286,36 +356,83 @@ export default function Analytics() {
 
         <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"var(--bg)"}}>
 
-          {/* ═══════════════ OVERVIEW ═══════════════ */}
           {tab==="overview" && <>
-
             {/* KPI row */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:18}}>
               {[
-                {label:"Total Spent",val:totalSpent,icon:"💸",bg:"#faf5ff",sub:"all time"},
-                {label:"This Month",val:curVal,icon:"📅",bg:"#eff6ff",sub:"vs last month",trend},
-                {label:"Daily Average",val:Math.round(dailyAvg),icon:"☀️",bg:"#ecfdf5",sub:"per day"},
-                {label:"Next Month Est.",val:Math.round(prediction),icon:"🔮",bg:"#fffbeb",sub:"projection"},
+                {label:"Total Spent",    val:totalSpent,         icon:"💸", bg:"#faf5ff", sub:"all time",      extra:null},
+                {label:"This Month",     val:curVal,             icon:"📅", bg:"#eff6ff", sub:"vs last month", extra:"trend"},
+                {label:"Daily Average",  val:Math.round(dailyAvg),icon:"☀️",bg:"#ecfdf5", sub:"per day",       extra:null},
+                {label:"Next Month Est.",val:pred.value,         icon:"🔮", bg:"#fffbeb", sub:null,            extra:"pred"},
               ].map((k,i)=>(
                 <div key={i} className={`kcard fu${i}`} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"18px 20px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                     <div style={{fontSize:11,fontWeight:600,color:"var(--ink3)",textTransform:"uppercase",letterSpacing:".6px"}}>{k.label}</div>
                     <div style={{width:34,height:34,borderRadius:9,background:k.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{k.icon}</div>
                   </div>
-                  <div style={{fontSize:22,fontWeight:700,color:"var(--ink)",marginBottom:6,fontVariantNumeric:"tabular-nums"}}>₹{fmtK(k.val)}</div>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    {k.trend!==undefined&&(
-                      <span style={{fontSize:11,fontWeight:700,color:k.trend>=0?"var(--red)":"var(--green)",background:k.trend>=0?"var(--red-bg)":"var(--green-bg)",padding:"2px 7px",borderRadius:99}}>
-                        {k.trend>=0?"↑":"↓"}{Math.abs(k.trend).toFixed(1)}%
+                  <div style={{fontSize:22,fontWeight:700,color:"var(--ink)",marginBottom:6}}>Rs.{fmtK(k.val)}</div>
+                  {k.extra==="trend" && (
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:11,fontWeight:700,color:trend>=0?"var(--red)":"var(--green)",background:trend>=0?"var(--red-bg)":"var(--green-bg)",padding:"2px 7px",borderRadius:99}}>
+                        {trend>=0?"↑":"↓"}{Math.abs(trend).toFixed(1)}%
                       </span>
-                    )}
-                    <span style={{fontSize:11,color:"var(--ink4)"}}>{k.sub}</span>
-                  </div>
+                      <span style={{fontSize:11,color:"var(--ink4)"}}>vs last month</span>
+                    </div>
+                  )}
+                  {k.extra==="pred" && (
+                    <div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                        <span style={{fontSize:10,fontWeight:700,color:confColor,background:confBg,padding:"1px 7px",borderRadius:99}}>
+                          {pred.confidence} confidence
+                        </span>
+                        {pred.trendAmt !== 0 && (
+                          <span style={{fontSize:10,color:"var(--ink4)"}}>
+                            {pred.trendAmt > 0 ? "+" : ""}{fmt(pred.trendAmt)}/mo trend
+                          </span>
+                        )}
+                      </div>
+                      <button onClick={()=>setShowBreakdown(!showBreakdown)}
+                        style={{fontSize:10,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",padding:0,textDecoration:"underline"}}>
+                        {showBreakdown ? "Hide details" : "How is this calculated?"}
+                      </button>
+                    </div>
+                  )}
+                  {!k.extra && <span style={{fontSize:11,color:"var(--ink4)"}}>{k.sub}</span>}
                 </div>
               ))}
             </div>
 
-            {/* Trend line - full width */}
+            {/* Prediction breakdown panel */}
+            {showBreakdown && pred.factors.length > 0 && (
+              <div style={{background:"linear-gradient(135deg,#faf5ff,#f0ebff)",border:"1px solid #ddd6fe",borderRadius:12,padding:"20px 22px",marginBottom:18}}>
+                <div style={{fontSize:14,fontWeight:700,color:"var(--accent)",marginBottom:3}}>
+                  Prediction Engine: {pred.method}
+                </div>
+                <div style={{fontSize:12,color:"var(--ink3)",marginBottom:14}}>
+                  Not a simple guess — we combine multiple signals and weight them by reliability:
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10,marginBottom:14}}>
+                  {pred.factors.map((f,i)=>(
+                    <div key={i} style={{background:"#fff",borderRadius:9,padding:"12px 14px",border:"1px solid #ede9fe"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                        <span style={{fontSize:11,fontWeight:600,color:"var(--ink2)"}}>{f.label}</span>
+                        <span style={{fontSize:10,fontWeight:700,color:"var(--accent)",background:"#ede9fe",padding:"1px 7px",borderRadius:99}}>{f.weight}</span>
+                      </div>
+                      <div style={{fontSize:16,fontWeight:700,color:"var(--ink)",marginBottom:3}}>Rs.{fmt(f.value)}</div>
+                      <div style={{fontSize:10,color:"var(--ink4)"}}>{f.note}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{fontSize:11,color:"var(--ink3)",background:"#fff",padding:"10px 14px",borderRadius:8,border:"1px solid #ede9fe",display:"flex",gap:16,flexWrap:"wrap"}}>
+                  <span><strong>Method:</strong> {pred.method}</span>
+                  <span><strong>Confidence:</strong> <span style={{color:confColor,fontWeight:600}}>{pred.confidence}</span></span>
+                  {pred.trendAmt!==0 && <span><strong>Monthly drift:</strong> <span style={{color:pred.trendAmt>0?"var(--red)":"var(--green)",fontWeight:600}}>{pred.trendAmt>0?"+":""}{fmt(pred.trendAmt)}/month</span></span>}
+                  <span><strong>Data used:</strong> {months.length} month{months.length!==1?"s":""}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Trend line */}
             <div className="fu2" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"20px",marginBottom:16,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                 <div>
@@ -327,14 +444,12 @@ export default function Analytics() {
               <div style={{height:220}}>{months.length>0?<Line data={lineData} options={lineOpts}/>:<Empty msg="Add expenses to see your trend"/>}</div>
             </div>
 
-            {/* 2-col charts */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
               <div className="fu3" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"20px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:4}}>Spend by Category</div>
                 <div style={{fontSize:12,color:"var(--ink3)",marginBottom:14}}>Where does your money go?</div>
                 <div style={{height:210}}>{catLabels.length>0?<Doughnut data={donutData} options={donutOpts}/>:<Empty msg="No categories yet"/>}</div>
               </div>
-
               <div className="fu3" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"20px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:4}}>Spending by Day of Week</div>
                 <div style={{fontSize:12,color:"var(--ink3)",marginBottom:14}}>{wdTotals.some(v=>v>0)?`You spend most on ${peakDay}s`:"Track expenses to see your pattern"}</div>
@@ -342,32 +457,28 @@ export default function Analytics() {
               </div>
             </div>
 
-            {/* Month comparison */}
             {prevMonth&&curMonth&&(
               <div className="fu4" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"20px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",marginBottom:4}}>This Month vs Last Month</div>
-                <div style={{fontSize:12,color:"var(--ink3)",marginBottom:14}}>{curVal>prevVal?`You spent ₹${fmt(curVal-prevVal)} more than last month`:`You saved ₹${fmt(prevVal-curVal)} compared to last month 🎉`}</div>
+                <div style={{fontSize:12,color:"var(--ink3)",marginBottom:14}}>{curVal>prevVal?`You spent Rs.${fmt(curVal-prevVal)} more than last month`:`You saved Rs.${fmt(prevVal-curVal)} compared to last month!`}</div>
                 <div style={{height:180}}><Bar data={cmpData} options={cmpOpts}/></div>
               </div>
             )}
           </>}
 
-          {/* ═══════════════ INSIGHTS ═══════════════ */}
           {tab==="insights" && <>
-
-            {/* Score breakdown */}
             <div className="fu0" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"24px",marginBottom:18,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{display:"flex",gap:24,alignItems:"center",flexWrap:"wrap"}}>
                 <div style={{textAlign:"center",minWidth:100}}>
-                  <div style={{fontSize:52,fontWeight:700,color:scoreColor,lineHeight:1,fontVariantNumeric:"tabular-nums"}}>{score}</div>
+                  <div style={{fontSize:52,fontWeight:700,color:scoreColor,lineHeight:1}}>{score}</div>
                   <div style={{fontSize:12,fontWeight:700,color:scoreColor,marginTop:4}}>{scoreLabel}</div>
                   <div style={{fontSize:11,color:"var(--ink3)",marginTop:2}}>Budget Health Score</div>
                 </div>
                 <div style={{flex:1,minWidth:280}}>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:10}}>Score breakdown</div>
                   {[
-                    {label:"Monthly spend level",ok:avgPerMonth<20000,msg:avgPerMonth<20000?"Under ₹20k — great for a student!":"Above ₹20k — consider reducing"},
-                    {label:"Spending trend",ok:trend<=5,msg:trend<=5?"Stable or falling ✓":"Rising fast — needs attention"},
+                    {label:"Monthly spend level",ok:avgPerMonth<20000,msg:avgPerMonth<20000?"Under Rs.20k — great for a student!":"Above Rs.20k — consider reducing"},
+                    {label:"Spending trend",ok:trend<=5,msg:trend<=5?"Stable or falling":"Rising fast — needs attention"},
                     {label:"Category diversity",ok:catLabels.length>=3,msg:catLabels.length>=3?"Tracking multiple categories":"Track more categories for better insights"},
                     {label:"Top category share",ok:catLabels.length===0||(catTotals[catLabels[0]]||0)/Math.max(totalSpent,1)<0.6,msg:catLabels.length===0||(catTotals[catLabels[0]]||0)/Math.max(totalSpent,1)<0.6?"Spend spread across categories":`${catLabels[0]||"One category"} taking >60% of budget`},
                   ].map((row,i)=>(
@@ -382,7 +493,6 @@ export default function Analytics() {
               </div>
             </div>
 
-            {/* Insight cards 2×2 */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:18}}>
               {insights.map((ins,i)=>(
                 <div key={i} className={`ins-card fu${i}`} style={{background:ins.bg,border:`1.5px solid ${ins.color}30`,borderRadius:12,padding:"18px 20px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
@@ -393,9 +503,8 @@ export default function Analytics() {
               ))}
             </div>
 
-            {/* Budget guide */}
             <div className="fu3" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"20px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-              <div style={{fontSize:14,fontWeight:700,color:"var(--ink)",marginBottom:4}}>📚 Recommended Student Budget</div>
+              <div style={{fontSize:14,fontWeight:700,color:"var(--ink)",marginBottom:4}}>Recommended Student Budget</div>
               <div style={{fontSize:12,color:"var(--ink3)",marginBottom:18}}>How your spending compares to what financial advisors recommend for students</div>
               {BUDGET_GUIDE.map((row,i)=>{
                 const actual=totalSpent>0?row.keys.reduce((s,k)=>s+(catTotals[k]||0),0)/totalSpent*100:0;
@@ -413,22 +522,17 @@ export default function Analytics() {
                       </div>
                     </div>
                     <div style={{position:"relative",height:7,background:"#f0edf8",borderRadius:99,overflow:"hidden"}}>
-                      {/* recommended marker */}
                       <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${row.rec}%`,background:"rgba(124,92,191,.15)",borderRadius:99}}/>
-                      {/* actual */}
                       <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${Math.min(actual,100)}%`,background:over?"var(--red)":"var(--accent)",borderRadius:99,transition:"width .8s ease"}}/>
                     </div>
-                    <div style={{fontSize:11,color:"var(--ink4)",marginTop:3}}>💡 {row.tip}</div>
+                    <div style={{fontSize:11,color:"var(--ink4)",marginTop:3}}>Tip: {row.tip}</div>
                   </div>
                 );
               })}
             </div>
           </>}
 
-          {/* ═══════════════ BREAKDOWN ═══════════════ */}
           {tab==="breakdown" && <>
-
-            {/* Category table */}
             {catLabels.length>0?(
               <div className="fu0" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden",marginBottom:16,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{padding:"16px 20px",borderBottom:"1px solid var(--border)"}}>
@@ -450,12 +554,12 @@ export default function Analytics() {
                         <span style={{fontSize:17}}>{CAT_EMOJI[cat]||"💳"}</span>
                         <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{cat}</span>
                       </div>
-                      <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",fontVariantNumeric:"tabular-nums"}}>₹{fmt(catTotals[cat])}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>Rs.{fmt(catTotals[cat])}</div>
                       <div style={{fontSize:12,color:"var(--ink3)"}}>{pct.toFixed(1)}%</div>
                       <div style={{height:6,background:"#f0edf8",borderRadius:99,overflow:"hidden",marginRight:12}}>
                         <div style={{height:"100%",width:`${pct}%`,borderRadius:99,background:COLORS[i%COLORS.length]}}/>
                       </div>
-                      <div style={{fontSize:11,color:"var(--ink4)"}}>₹{fmt(Math.round(avg))}/day</div>
+                      <div style={{fontSize:11,color:"var(--ink4)"}}>Rs.{fmt(Math.round(avg))}/day</div>
                     </div>
                   );
                 })}
@@ -468,7 +572,6 @@ export default function Analytics() {
               </div>
             )}
 
-            {/* Monthly history */}
             {months.length>0&&(
               <div className="fu1" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{padding:"16px 20px",borderBottom:"1px solid var(--border)"}}>
@@ -487,7 +590,7 @@ export default function Analytics() {
                       <div style={{flex:1,height:7,background:"#f0edf8",borderRadius:99,overflow:"hidden"}}>
                         <div style={{height:"100%",width:`${(val/maxVal)*100}%`,background:"var(--accent)",borderRadius:99,transition:"width .8s"}}/>
                       </div>
-                      <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",width:90,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>₹{fmt(val)}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",width:90,textAlign:"right"}}>Rs.{fmt(val)}</div>
                       {mTrend!==null&&(
                         <div style={{fontSize:11,fontWeight:700,color:mTrend>0?"var(--red)":"var(--green)",background:mTrend>0?"var(--red-bg)":"var(--green-bg)",padding:"2px 8px",borderRadius:99,width:56,textAlign:"center"}}>
                           {mTrend>0?"↑":"↓"}{Math.abs(mTrend).toFixed(0)}%

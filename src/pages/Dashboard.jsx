@@ -311,8 +311,8 @@ export default function Dashboard() {
   );
 
   // Grid columns for dashboard recent tx table
-  // icon | category+merchant | amount | date | type
-  const TX_COLS = "36px 1fr 100px 120px 80px";
+  // icon | category | merchant | amount | date | type
+  const TX_COLS = "36px 120px 1fr 90px 160px 80px";
 
   return (
     <div style={{ display:"flex", minHeight:"100vh" }}>
@@ -374,7 +374,7 @@ export default function Dashboard() {
 
               {/* Table header */}
               <div style={{ display:"grid", gridTemplateColumns:TX_COLS, padding:"8px 16px", background:"#f9fafb", borderBottom:"1px solid var(--border)" }}>
-                {["","Category & Merchant","Amount","Date & Time","Type"].map(h => (
+                {["","Category","Merchant","Amount","Date & Time","Type"].map(h => (
                   <div key={h} style={{ fontSize:10, fontWeight:600, color:"var(--ink3)", textTransform:"uppercase", letterSpacing:".5px" }}>{h}</div>
                 ))}
               </div>
@@ -398,16 +398,14 @@ export default function Dashboard() {
                       {CAT_EMOJI[t.category] || "💳"}
                     </div>
 
-                    {/* Category + Merchant */}
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                        {t.category || "—"}
-                      </div>
-                      {merchant && (
-                        <div style={{ fontSize:11, color:"var(--ink4)", marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                          {merchant}
-                        </div>
-                      )}
+                    {/* Category */}
+                    <div style={{ fontSize:13, fontWeight:600, color:"var(--ink)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                      {t.category || "—"}
+                    </div>
+
+                    {/* Merchant */}
+                    <div style={{ fontSize:12, color:"var(--ink3)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                      {merchant || <span style={{ color:"var(--ink4)", fontStyle:"italic" }}>—</span>}
                     </div>
 
                     {/* Amount */}
