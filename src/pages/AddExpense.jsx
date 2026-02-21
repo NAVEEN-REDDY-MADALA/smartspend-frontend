@@ -22,6 +22,10 @@ const CSS = `
     --green-bg:       #ecfdf5;
     --red:            #dc2626;
     --red-bg:         #fef2f2;
+    --amber:          #d97706;
+    --amber-bg:       #fffbeb;
+    --blue:           #2563eb;
+    --blue-bg:        #eff6ff;
   }
   html, body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
   ::-webkit-scrollbar { width: 4px; }
@@ -29,6 +33,7 @@ const CSS = `
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   @keyframes spin   { to { transform:rotate(360deg); } }
   @keyframes check  { 0%{transform:scale(0)} 60%{transform:scale(1.2)} 100%{transform:scale(1)} }
+  @keyframes pop    { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
   .fade { animation: fadeIn .3s ease both; }
   .slink       { transition: background .15s, color .15s; cursor: pointer; }
   .slink:hover { background: var(--sidebar-hover) !important; color: #fff !important; }
@@ -40,15 +45,33 @@ const CSS = `
   .qbtn:hover { border-color: var(--accent) !important; }
   .sbtn { transition: opacity .15s, transform .1s; }
   .sbtn:hover:not(:disabled) { opacity:.9; transform:translateY(-1px); }
+  .tip-card { animation: pop .3s ease both; }
 `;
 
 function injectCSS() {
-  if (typeof document === "undefined" || document.getElementById("__ent__")) return;
-  const s = document.createElement("style"); s.id = "__ent__"; s.textContent = CSS;
+  if (typeof document === "undefined" || document.getElementById("__addexp__")) return;
+  const s = document.createElement("style"); s.id = "__addexp__"; s.textContent = CSS;
   document.head.appendChild(s);
 }
 
-const fmt = n => new Intl.NumberFormat("en-IN", { maximumFractionDigits:0 }).format(n);
+const fmt = n => new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
+
+// IST time — always correct regardless of device timezone
+function nowIST() {
+  const now = new Date();
+  // IST = UTC+5:30
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
+  return new Date(utc + istOffset);
+}
+function todayIST() {
+  const d = nowIST();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function currentTimeIST() {
+  const d = nowIST();
+  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
 
 const Icon = ({ d, size = 14, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -67,26 +90,21 @@ const ICONS = {
   logout:   "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
   back:     "M19 12H5M12 19l-7-7 7-7",
   check:    "M20 6L9 17l-5-5",
+  bulb:     "M9 18h6M10 22h4M12 2a7 7 0 017 7c0 2.38-1.19 4.47-3 5.74V17H8v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 017-7z",
 };
 
 const NAV_SECTIONS = [
   { label: null, items: [{ to:"/dashboard", label:"Home", icon:"home" }] },
-  {
-    label: "Track Money",
-    items: [
-      { to:"/transactions", label:"Transactions", icon:"tx"       },
-      { to:"/analytics",    label:"Analytics",    icon:"analytics"},
-      { to:"/goals",        label:"My Goals",     icon:"goals"    },
-      { to:"/budgets",      label:"My Budgets",   icon:"budget"   },
-    ]
-  },
-  {
-    label: "Auto Features",
-    items: [
-      { to:"/detected-transactions", label:"SMS Detected", icon:"detect"   },
-      { to:"/reminders",             label:"Reminders",    icon:"reminder" },
-    ]
-  },
+  { label: "Track Money", items: [
+    { to:"/transactions", label:"Transactions", icon:"tx"       },
+    { to:"/analytics",    label:"Analytics",    icon:"analytics"},
+    { to:"/goals",        label:"My Goals",     icon:"goals"    },
+    { to:"/budgets",      label:"My Budgets",   icon:"budget"   },
+  ]},
+  { label: "Auto Features", items: [
+    { to:"/detected-transactions", label:"SMS Detected", icon:"detect"   },
+    { to:"/reminders",             label:"Reminders",    icon:"reminder" },
+  ]},
 ];
 
 function Sidebar({ onLogout }) {
@@ -105,8 +123,7 @@ function Sidebar({ onLogout }) {
           <div key={si} style={{ marginBottom:6 }}>
             {sec.label && <div style={{ fontSize:10, fontWeight:600, color:"var(--sidebar-muted)", letterSpacing:"1px", textTransform:"uppercase", padding:"8px 8px 4px" }}>{sec.label}</div>}
             {sec.items.map(item => (
-              <a key={item.to} href={item.to}
-                className={`slink${path===item.to?" active":""}`}
+              <a key={item.to} href={item.to} className={`slink${path===item.to?" active":""}`}
                 style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", borderRadius:7, color:"var(--sidebar-text)", fontSize:13, textDecoration:"none", marginBottom:1 }}>
                 <Icon d={ICONS[item.icon]} size={14} />{item.label}
               </a>
@@ -124,7 +141,38 @@ function Sidebar({ onLogout }) {
   );
 }
 
-// ─── Quick-pick grids ─────────────────────────────────────────────────────────
+// ─── Student tips per category ────────────────────────────────────────────────
+const STUDENT_TIPS = {
+  Food:          { tip: "Cooking at home 3x a week saves ~₹800/month on average.", emoji:"🍜" },
+  Groceries:     { tip: "Buy weekly in bulk from D-Mart or local mandi — saves 20–30% vs daily shopping.", emoji:"🛒" },
+  Transport:     { tip: "A monthly bus pass costs ₹200–400. If you travel daily, it pays off in 3 rides.", emoji:"🚗" },
+  Shopping:      { tip: "Wait 48 hours before buying anything over ₹500 — you'll skip 60% of impulse buys.", emoji:"🛍️" },
+  Entertainment: { tip: "Share OTT subscriptions with 3 friends and split the cost — pay just ₹50/month.", emoji:"🎬" },
+  Bills:         { tip: "Set auto-pay reminders 3 days before due dates to avoid late fees.", emoji:"💡" },
+  Medicine:      { tip: "Generic medicines are 50–80% cheaper and equally effective. Ask your pharmacist.", emoji:"💊" },
+  Travel:        { tip: "Book train tickets 90+ days ahead for tatkal savings. Use student IRCTC concession.", emoji:"✈️" },
+  Coffee:        { tip: "₹80 coffee daily = ₹2,400/month. A decent French press costs ₹400 one-time.", emoji:"☕" },
+  Books:         { tip: "Check your college library first. Z-Library and Anna's Archive have most textbooks free.", emoji:"📚" },
+  Rent:          { tip: "Split Wi-Fi, LPG, and electricity bills clearly with flatmates to avoid disputes.", emoji:"🏠" },
+  Other:         { tip: "Log even small spends — ₹20 here and ₹50 there add up to ₹1,500+/month.", emoji:"💳" },
+};
+
+// ─── Quick merchant suggestions per category ──────────────────────────────────
+const MERCHANT_SUGGESTIONS = {
+  Food:          ["Zomato", "Swiggy", "Mess", "Canteen", "Domino's", "McDonald's"],
+  Groceries:     ["D-Mart", "Big Basket", "Blinkit", "Zepto", "Local Market"],
+  Transport:     ["Uber", "Ola", "Rapido", "Metro", "IRCTC", "RedBus"],
+  Shopping:      ["Amazon", "Flipkart", "Myntra", "Meesho", "Ajio"],
+  Entertainment: ["Netflix", "Hotstar", "BookMyShow", "Spotify", "PVR"],
+  Bills:         ["Jio", "Airtel", "Vi", "Electricity Board", "College Fees"],
+  Medicine:      ["MedLife", "Apollo Pharmacy", "1mg", "PharmEasy", "Netmeds"],
+  Travel:        ["IRCTC", "MakeMyTrip", "Goibibo", "RedBus", "IndiGo"],
+  Coffee:        ["Starbucks", "CCD", "Third Wave", "Local Cafe"],
+  Books:         ["Amazon", "Flipkart", "Local Book Store", "College Bookshop"],
+  Rent:          ["Landlord", "PG Owner", "Hostel"],
+  Other:         [],
+};
+
 const CATEGORIES = [
   { label:"Food",          emoji:"🍜" },
   { label:"Groceries",     emoji:"🛒" },
@@ -149,10 +197,7 @@ const PAYMENTS = [
 
 const QUICK_AMOUNTS = [50, 100, 150, 200, 500, 1000];
 
-// ─── F and QuickGrid MUST be outside AddExpense ───────────────────────────────
-// If defined inside, React creates a new component type on every render,
-// unmounting/remounting the DOM — which causes inputs to lose focus after each keystroke.
-
+// ─── Sub-components at module scope (prevent focus loss on re-render) ─────────
 const F = ({ label, hint, children }) => (
   <div style={{ marginBottom:20 }}>
     <label style={{ fontSize:13, fontWeight:500, color:"var(--ink2)", display:"block", marginBottom: hint?4:6 }}>{label}</label>
@@ -164,14 +209,12 @@ const F = ({ label, hint, children }) => (
 const QuickGrid = ({ items, selected, onSelect, cols = 4 }) => (
   <div style={{ display:"grid", gridTemplateColumns:`repeat(${cols},1fr)`, gap:8 }}>
     {items.map(item => (
-      <button key={item.label} type="button"
-        className="qbtn"
-        onClick={() => onSelect(item.label)}
+      <button key={item.label} type="button" className="qbtn" onClick={() => onSelect(item.label)}
         style={{
           padding:"9px 4px", borderRadius:8, fontFamily:"inherit",
-          border: selected===item.label ? "2px solid var(--accent)" : "1.5px solid var(--border)",
-          background: selected===item.label ? "rgba(124,92,191,.07)" : "var(--surface)",
-          color: selected===item.label ? "var(--accent)" : "var(--ink2)",
+          border:      selected===item.label ? "2px solid var(--accent)"  : "1.5px solid var(--border)",
+          background:  selected===item.label ? "rgba(124,92,191,.07)"     : "var(--surface)",
+          color:       selected===item.label ? "var(--accent)"            : "var(--ink2)",
           fontSize:11, fontWeight:500, textAlign:"center",
         }}>
         <div style={{ fontSize:17, marginBottom:3 }}>{item.emoji}</div>
@@ -182,7 +225,6 @@ const QuickGrid = ({ items, selected, onSelect, cols = 4 }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-
 export default function AddExpense() {
   injectCSS();
   const navigate = useNavigate();
@@ -190,46 +232,53 @@ export default function AddExpense() {
 
   const [amount,   setAmount]   = useState("");
   const [category, setCategory] = useState("");
+  const [merchant, setMerchant] = useState("");
   const [payment,  setPayment]  = useState("");
-  const [date,     setDate]     = useState(new Date().toISOString().split("T")[0]);
+  const [date,     setDate]     = useState(todayIST);
+  const [time,     setTime]     = useState(currentTimeIST);  // IST time
   const [loading,  setLoading]  = useState(false);
   const [status,   setStatus]   = useState(null);
   const [errMsg,   setErrMsg]   = useState("");
 
-  useEffect(() => {
-    if (!token) navigate("/", { replace:true });
-  }, []);
+  useEffect(() => { if (!token) navigate("/", { replace:true }); }, []);
 
   function logout() { localStorage.removeItem("token"); navigate("/"); }
+
+  // Merchant suggestions for selected category
+  const suggestions = category ? (MERCHANT_SUGGESTIONS[category] || []) : [];
+  const currentTip  = category ? STUDENT_TIPS[category] : null;
 
   async function save(e) {
     e.preventDefault();
     if (loading) return;
     setLoading(true); setStatus(null);
 
+    // Build IST datetime string for created_at
+    const createdAt = `${date}T${time}:00+05:30`;
+
     try {
       const res = await fetch("https://smartspend-backend-aupt.onrender.com/api/expenses/", {
         method: "POST",
         headers: { "Content-Type":"application/json", Authorization:`Bearer ${token}` },
         body: JSON.stringify({
-          amount: parseFloat(amount),
+          amount:         parseFloat(amount),
           category,
+          merchant:       merchant.trim() || null,
           payment_method: payment,
           date,
-          created_at: new Date().toISOString(),
+          created_at:     createdAt,
         }),
       });
 
       if (!res.ok) {
-        const d = await res.json().catch(()=>({}));
+        const d = await res.json().catch(() => ({}));
         setErrMsg(d.detail || "Something went wrong. Try again.");
         setStatus("error");
         return;
       }
 
       setStatus("success");
-      setTimeout(() => navigate("/dashboard", { replace:true }), 1200);
-
+      setTimeout(() => navigate("/dashboard", { replace:true }), 1400);
     } catch {
       setErrMsg("Can't reach the server. Check your internet.");
       setStatus("error");
@@ -258,24 +307,27 @@ export default function AddExpense() {
         </div>
 
         <div style={{ flex:1, overflowY:"auto", padding:"32px 28px", background:"var(--bg)", display:"flex", justifyContent:"center" }}>
-          <div className="fade" style={{ width:"100%", maxWidth:520 }}>
+          <div className="fade" style={{ width:"100%", maxWidth:540 }}>
 
-            {/* Success */}
             {status === "success" ? (
+              // ── Success screen ──────────────────────────────────────────────
               <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"48px 32px", textAlign:"center" }}>
                 <div style={{ width:56, height:56, borderRadius:"50%", background:"rgba(124,92,191,.1)", display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", animation:"check .4s ease" }}>
                   <Icon d={ICONS.check} size={26} color="var(--accent)" />
                 </div>
                 <div style={{ fontSize:17, fontWeight:700, color:"var(--ink)", marginBottom:6 }}>Expense saved!</div>
-                <div style={{ fontSize:13, color:"var(--ink3)" }}>
-                  ₹{fmt(parseFloat(amount)||0)} on {category} logged.<br />Taking you back to the dashboard…
+                <div style={{ fontSize:13, color:"var(--ink3)", lineHeight:1.7 }}>
+                  ₹{fmt(parseFloat(amount)||0)} on {category}
+                  {merchant ? ` at ${merchant}` : ""} — logged.<br />
+                  Taking you back to the dashboard…
                 </div>
               </div>
             ) : (
+              // ── Form ────────────────────────────────────────────────────────
               <div style={{ background:"var(--surface)", border:"1px solid var(--border)", borderRadius:12, padding:"28px", boxShadow:"0 1px 4px rgba(0,0,0,.04)" }}>
                 <form onSubmit={save}>
 
-                  {/* Amount */}
+                  {/* ── Amount ── */}
                   <F label="How much did you spend? (₹)">
                     <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
                       {QUICK_AMOUNTS.map(q => (
@@ -283,9 +335,9 @@ export default function AddExpense() {
                           onClick={() => setAmount(q.toString())}
                           style={{
                             padding:"4px 12px", borderRadius:99, fontSize:12, fontWeight:500, cursor:"pointer", fontFamily:"inherit",
-                            border: amount===q.toString() ? "1.5px solid var(--accent)" : "1.5px solid var(--border)",
-                            background: amount===q.toString() ? "rgba(124,92,191,.07)" : "var(--surface)",
-                            color: amount===q.toString() ? "var(--accent)" : "var(--ink3)",
+                            border:      amount===q.toString() ? "1.5px solid var(--accent)"   : "1.5px solid var(--border)",
+                            background:  amount===q.toString() ? "rgba(124,92,191,.07)"         : "var(--surface)",
+                            color:       amount===q.toString() ? "var(--accent)"               : "var(--ink3)",
                             transition:"border-color .12s, background .12s",
                           }}>
                           ₹{q}
@@ -300,54 +352,115 @@ export default function AddExpense() {
                         value={amount}
                         onChange={e => setAmount(e.target.value)}
                         className="inp"
+                        inputMode="decimal"
                         style={{ paddingLeft:28, fontSize:20, fontWeight:600 }}
                       />
                     </div>
                   </F>
 
-                  {/* Category */}
+                  {/* ── Category ── */}
                   <F label="What did you spend on?">
-                    <QuickGrid items={CATEGORIES} selected={category} onSelect={setCategory} cols={4} />
+                    <QuickGrid items={CATEGORIES} selected={category} onSelect={cat => { setCategory(cat); setMerchant(""); }} cols={4} />
                   </F>
 
-                  {/* Payment method */}
+                  {/* ── Student tip — appears after category is picked ── */}
+                  {currentTip && (
+                    <div className="tip-card" style={{
+                      marginBottom:20, padding:"12px 14px", borderRadius:9,
+                      background:"var(--amber-bg)", border:"1px solid #fde68a",
+                      display:"flex", gap:10, alignItems:"flex-start",
+                    }}>
+                      <span style={{ fontSize:18, flexShrink:0 }}>💡</span>
+                      <div>
+                        <div style={{ fontSize:11, fontWeight:700, color:"var(--amber)", textTransform:"uppercase", letterSpacing:".5px", marginBottom:3 }}>Student Tip</div>
+                        <div style={{ fontSize:12, color:"var(--ink2)", lineHeight:1.6 }}>{currentTip.tip}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Merchant ── */}
+                  <F label="Where did you pay? (optional)" hint="Helps you track spending at specific places">
+                    {/* Quick suggestions */}
+                    {suggestions.length > 0 && (
+                      <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+                        {suggestions.map(s => (
+                          <button key={s} type="button"
+                            onClick={() => setMerchant(s)}
+                            style={{
+                              padding:"3px 11px", borderRadius:99, fontSize:11, fontWeight:500, cursor:"pointer", fontFamily:"inherit",
+                              border:     merchant===s ? "1.5px solid var(--accent)"  : "1.5px solid var(--border)",
+                              background: merchant===s ? "rgba(124,92,191,.07)"        : "var(--surface)",
+                              color:      merchant===s ? "var(--accent)"              : "var(--ink3)",
+                              transition:"border-color .12s",
+                            }}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      placeholder={category ? `e.g. ${suggestions[0] || "Merchant name"}` : "Pick a category first"}
+                      value={merchant}
+                      onChange={e => setMerchant(e.target.value)}
+                      className="inp"
+                      maxLength={80}
+                      disabled={!category}
+                      style={{ opacity: category ? 1 : 0.5 }}
+                    />
+                  </F>
+
+                  {/* ── Payment method ── */}
                   <F label="How did you pay?">
                     <QuickGrid items={PAYMENTS} selected={payment} onSelect={setPayment} cols={4} />
                   </F>
 
-                  {/* Date */}
-                  <F label="When?" hint="Defaults to today">
-                    <input type="date" value={date} onChange={e => setDate(e.target.value)} className="inp" />
+                  {/* ── Date & Time ── */}
+                  <F label="When?" hint="Defaults to right now (IST)">
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div>
+                        <div style={{ fontSize:11, color:"var(--ink4)", marginBottom:4 }}>Date</div>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="inp" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:11, color:"var(--ink4)", marginBottom:4 }}>Time (IST)</div>
+                        <input type="time" value={time} onChange={e => setTime(e.target.value)} className="inp" />
+                      </div>
+                    </div>
+                    <div style={{ marginTop:6, fontSize:11, color:"var(--ink4)" }}>
+                      📍 Currently {nowIST().toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit", hour12:true })} IST
+                    </div>
                   </F>
 
-                  {/* Error */}
+                  {/* ── Error ── */}
                   {status === "error" && (
                     <div style={{ marginBottom:16, padding:"10px 13px", borderRadius:8, background:"var(--red-bg)", color:"var(--red)", border:"1px solid #fecaca", fontSize:13 }}>
                       ⚠️ {errMsg}
                     </div>
                   )}
 
-                  {/* Submit */}
+                  {/* ── Submit ── */}
                   <button type="submit" disabled={!canSubmit} className="sbtn"
                     style={{
-                      width:"100%", padding:"11px", borderRadius:8,
+                      width:"100%", padding:"12px", borderRadius:8,
                       background: !canSubmit ? "#e5e7eb" : "var(--accent)",
                       border:"none",
-                      color: !canSubmit ? "var(--ink4)" : "#fff",
+                      color:      !canSubmit ? "var(--ink4)" : "#fff",
                       fontSize:14, fontWeight:600,
-                      cursor: !canSubmit ? "not-allowed" : "pointer",
+                      cursor:     !canSubmit ? "not-allowed" : "pointer",
                       fontFamily:"inherit",
                       display:"flex", alignItems:"center", justifyContent:"center", gap:8,
                     }}>
                     {loading && <span style={{ width:14, height:14, border:"2px solid rgba(255,255,255,.3)", borderTopColor:"#fff", borderRadius:"50%", display:"inline-block", animation:"spin .7s linear infinite" }} />}
-                    {loading ? "Saving…" : "Save Expense"}
+                    {loading ? "Saving…" : `Save ₹${amount || "0"} Expense`}
                   </button>
 
+                  {/* ── Helper nudge ── */}
                   {(!category || !payment) && (
                     <div style={{ textAlign:"center", marginTop:8, fontSize:11, color:"var(--ink4)" }}>
-                      {!category && !payment ? "Pick a category and payment method ↑"
-                        : !category ? "Pick what you spent on ↑"
-                        : "Pick how you paid ↑"}
+                      {!category && !payment ? "Pick a category and payment method above"
+                        : !category ? "Pick what you spent on above"
+                        : "Pick how you paid above"}
                     </div>
                   )}
 
