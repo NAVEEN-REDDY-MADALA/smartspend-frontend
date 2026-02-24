@@ -342,13 +342,14 @@ export const ICONS = {
 
 // ── NAV CONFIG ───────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-//   { to: "/dashboard",             emoji: "🏠", label: "Home"      },
+  { to: "/dashboard",             emoji: "🏠", label: "Home"      },
   { to: "/transactions",          emoji: "💳", label: "Spends"    },
+  { to: "/add-expense",           emoji: "➕", label: "Add"       },
   { to: "/analytics",             emoji: "📊", label: "Analytics" },
+  { to: "/budgets",               emoji: "💰", label: "Budgets"   },
   { to: "/goals",                 emoji: "🎯", label: "Goals"     },
   { to: "/detected-transactions", emoji: "📱", label: "SMS"       },
   { to: "/reminders",             emoji: "🔔", label: "Reminders" },
-  { to: "/budgets",               emoji: "💰", label: "Budgets"   },
 ];
 
 // ── Bottom Navigation ────────────────────────────────────────────────────────
