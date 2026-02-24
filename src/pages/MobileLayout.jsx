@@ -136,18 +136,18 @@ const MOBILE_CSS = `
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 12px;
     cursor: pointer;
     text-decoration: none;
     -webkit-tap-highlight-color: transparent;
     transition: background .12s;
     position: relative;
-    min-width: 52px;
+    min-width: 48px;
   }
   .nav-item.active { background: var(--brand-soft); }
-  .nav-item .nav-icon { font-size: 20px; transition: transform .12s; }
-  .nav-item .nav-label { font-size: 10px; font-weight: 600; color: var(--ink4); letter-spacing: .2px; }
+  .nav-item .nav-icon { font-size: 18px; transition: transform .12s; }
+  .nav-item .nav-label { font-size: 9px; font-weight: 600; color: var(--ink4); letter-spacing: .2px; }
   .nav-item.active .nav-label { color: var(--brand); }
   .nav-item:active .nav-icon { transform: scale(.88); }
 
@@ -344,7 +344,7 @@ export const ICONS = {
 const NAV_ITEMS = [
   { to: "/dashboard",             emoji: "🏠", label: "Home"      },
   { to: "/transactions",          emoji: "💳", label: "Spends"    },
-  { to: "/add-expense",           emoji: "➕", label: "Add"       },
+//   { to: "/add-expense",           emoji: "➕", label: "Add"       },
   { to: "/analytics",             emoji: "📊", label: "Analytics" },
   { to: "/budgets",               emoji: "💰", label: "Budgets"   },
   { to: "/goals",                 emoji: "🎯", label: "Goals"     },
