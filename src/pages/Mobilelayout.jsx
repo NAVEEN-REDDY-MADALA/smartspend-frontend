@@ -311,7 +311,7 @@ export const CAT_EMOJI = {
 
 // SVG Icon component
 export const Icon = ({ d, size = 18, color = "currentColor", strokeWidth = 2 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+  <svg width={size} height={size} viewBox="0 0 24 23" fill="none"
     stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
     <path d={d} />
   </svg>
