@@ -10,7 +10,7 @@ import {
 
 const CATEGORIES = ["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Other"];
 
-export function Budgets() {
+export default function Budgets() {
   injectMobileCSS();
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -189,5 +189,3 @@ export function Budgets() {
     </MobilePage>
   );
 }
-
-export default Budgets;

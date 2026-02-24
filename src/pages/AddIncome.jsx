@@ -54,7 +54,7 @@ const STUDENT_TIPS = {
   Other:"Log every spend — small amounts add up fast! 💡",
 };
 
-export function AddExpense() {
+export default function AddExpense() {
   injectMobileCSS();
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
@@ -224,7 +224,7 @@ const SOURCES = [
   {label:"Salary",emoji:"💰"},{label:"Other",emoji:"✨"},
 ];
 
-export function AddIncome() {
+export default function AddIncome() {
   injectMobileCSS();
   const navigate  = useNavigate();
   const token     = localStorage.getItem("token");
@@ -237,9 +237,9 @@ export function AddIncome() {
   const [status,  setStatus]  = useState(null);
   const [errMsg,  setErrMsg]  = useState("");
 
-  useEffect(()=>{ if(!token) navigate("/",{replace:true}); },[]);
+  useEffect(()=>{ if(!token) navigate("/",{replace:true}); },[token,navigate]);
 
-  function handleSourceSelect(e, label) {
+  function handleSourceSelect(e, label) {}
     e.preventDefault();
     setSource(label);
     amountRef.current?.focus();
