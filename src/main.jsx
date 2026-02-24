@@ -11,7 +11,7 @@ import Transactions from "./pages/Transactions.jsx";
 import Analytics from "./pages/Analytics.jsx";
 import Goals from "./pages/Goals.jsx";
 import DetectedTransactions from "./pages/DetectedTransactions.jsx";
-import Addforms from "./pages/Addforms.jsx";
+
 
 import Reminders from "./pages/Reminders.jsx";
 
@@ -30,7 +30,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <Route path="/goals" element={<Goals />} />
       <Route path="/detected-transactions" element={<DetectedTransactions />} />
       <Route path="/reminders" element={<Reminders />} />
-      <Route path="/addforms" element={<Addforms />} />
+      
 
 
     </Routes>
