@@ -741,7 +741,7 @@ export default function DetectedTransactions() {
         </div>
       </div>
 
-      <BottomNav pendingCount={pending.length} onLogout={logout} />
+      {/* <BottomNav pendingCount={pending.length} onLogout={logout} /> */}
     </div>
   );
 }
