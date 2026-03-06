@@ -33,15 +33,16 @@ const CSS = `
   .slink:hover  { background:rgba(255,255,255,.09); color:#fff; }
   .slink.active { background:rgba(255,255,255,.16); color:#fff; }
 
-  /* ── Bottom nav (mobile) ── */
+  /* ── Bottom nav ── */
   .bottom-nav {
     display:none; position:fixed; bottom:0; left:0; right:0; z-index:300;
     height:var(--nav-h); background:var(--sb);
     border-top:1px solid rgba(255,255,255,.1);
-    align-items:center; justify-content:space-around;
-    padding-bottom:env(safe-area-inset-bottom,0);
+    align-items:center; justify-content:space-between;
+    padding:0 4px; padding-bottom:env(safe-area-inset-bottom,0);
+    overflow:hidden;
   }
-  .bnav { display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 12px; border-radius:10px; text-decoration:none; color:rgba(255,255,255,.38); font-size:10px; font-weight:600; transition:all .18s; }
+  .bnav { display:flex; flex-direction:column; align-items:center; gap:2px; padding:5px 6px; border-radius:8px; text-decoration:none; color:rgba(255,255,255,.38); font-size:9px; font-weight:600; transition:all .18s; min-width:0; flex:1; }
   .bnav.active { color:#fff; background:rgba(255,255,255,.14); }
 
   /* ── Mobile top bar ── */
@@ -213,13 +214,13 @@ function Sidebar({onLogout,pendingCount}) {
 function BottomNav({pendingCount}) {
   const path=window.location.pathname;
   return (
-    <nav className="bottom-nav">
+    <nav className="bottom-nav" style={{width:"100%"}}>
       {BOT_NAV.map(it=>(
         <a key={it.to} href={it.to} className={`bnav${path===it.to?" active":""}`} style={{position:"relative"}}>
-          <Ico d={IC[it.icon]} s={22}/>
+          <Ico d={IC[it.icon]} s={19}/>
           {it.label}
           {it.to==="/detected-transactions"&&pendingCount>0&&(
-            <span style={{position:"absolute",top:2,right:6,background:"#ef4444",color:"#fff",fontSize:9,fontWeight:700,borderRadius:99,padding:"1px 5px"}}>{pendingCount}</span>
+            <span style={{position:"absolute",top:1,right:2,background:"#ef4444",color:"#fff",fontSize:8,fontWeight:700,borderRadius:99,padding:"1px 4px",lineHeight:1}}>{pendingCount}</span>
           )}
         </a>
       ))}
@@ -678,7 +679,7 @@ export default function Dashboard() {
               {/* Alerts */}
               {alerts.length>0&&(
                 <div className="card f4" style={{padding:"16px"}}>
-                  <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🔔 Heads up</div>
+                  <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🔔 Heads up!</div>
                   {alerts.map((a,i)=>(
                     <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:i<alerts.length-1?"1px solid var(--border)":"none"}}>
                       <Ico d={IC.warn} s={13} c={a.level==="high"?"var(--red)":"var(--amber)"}/>
