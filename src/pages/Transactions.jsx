@@ -92,11 +92,61 @@ const CSS = `
   .sheet-handle { width:38px; height:4px; background:var(--border); border-radius:99px; margin:10px auto 0; }
   .tx-card { transition:transform .1s,box-shadow .15s; }
   .tx-card:active { transform:scale(.99); box-shadow:0 2px 12px rgba(0,0,0,.1); }
+
+  /* Mobile quick filter bar */
+  .mobile-quick-filters {
+    background:var(--sidebar-bg);
+    padding:0 14px 12px;
+    display:none;
+  }
+  @media (max-width:768px) {
+    .mobile-quick-filters { display:block !important; }
+  }
+
+  /* Mobile search bar */
+  .mobile-search-bar {
+    background:var(--sidebar-bg);
+    padding:0 14px 10px;
+    display:none;
+  }
+  @media (max-width:768px) {
+    .mobile-search-bar { display:block !important; }
+  }
+
+  /* Horizontal scroll chips */
+  .chips-scroll {
+    display:flex;
+    gap:6px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+    padding-bottom:2px;
+  }
+  .chips-scroll::-webkit-scrollbar { display:none; }
+  .chip {
+    flex-shrink:0;
+    padding:6px 14px;
+    border-radius:99px;
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:var(--font);
+    border:1.5px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.1);
+    color:rgba(255,255,255,.75);
+    transition:all .15s;
+    white-space:nowrap;
+  }
+  .chip.active {
+    background:#fff;
+    color:var(--accent);
+    border-color:#fff;
+  }
 `;
 
 function injectCSS() {
-  if (typeof document==="undefined"||document.getElementById("__tx_v5__")) return;
-  const s=document.createElement("style"); s.id="__tx_v5__"; s.textContent=CSS;
+  if (typeof document==="undefined"||document.getElementById("__tx_v6__")) return;
+  const s=document.createElement("style"); s.id="__tx_v6__"; s.textContent=CSS;
   document.head.appendChild(s);
 }
 
@@ -221,12 +271,18 @@ function txDate(t) {
   return raw?raw.slice(0,10):null;
 }
 
-// Shared helper — gets display values for any transaction
 function getTxDisplay(t) {
+  // Trust _type as the source of truth (set from which API endpoint it came from)
   const isCredit = t._type==="credit";
   const auto     = isAutoTx(t);
-  const merchant = isCredit?(t.source||t.merchant||null):(t.merchant||t.merchant_name||t.description||null);
-  const category = isCredit?"Income":(t.category||t.category_guess||"Other");
+  // Income: category is always "Income"; merchant/from is the sender name/source
+  // Expense: category is the expense category; merchant is the merchant name
+  const category = isCredit
+    ? "Income"
+    : (t.category||t.category_guess||"Other");
+  const merchant = isCredit
+    ? (t.source||t.merchant||t.merchant_name||t.description||null)
+    : (t.merchant||t.merchant_name||t.description||null);
   const dateStr  = fmtDateTime(t.created_at||t.date);
   const accentColor = isCredit?"var(--green)":"var(--red)";
   const accentBg    = isCredit?"var(--green-bg)":"var(--red-bg)";
@@ -297,16 +353,9 @@ function DetailDrawer({ txn, onClose }) {
   );
 }
 
-// ── Mobile Filter Sheet ───────────────────────────────────────────────────────
-function FilterSheet({ typeFilter, setTypeFilter, search, setSearch, category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo, onClose, onClear }) {
+// ── Mobile Filter Sheet (advanced: category + date range) ─────────────────────
+function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo, onClose, onClear }) {
   const CATEGORIES = ["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Income","Salary","Other"];
-  const chip = (active) => ({
-    padding:"9px 18px", borderRadius:99, fontSize:13, fontWeight:600,
-    background:active?"var(--accent)":"var(--bg)",
-    color:active?"#fff":"var(--ink3)",
-    border:active?"none":"1px solid var(--border)",
-    cursor:"pointer", fontFamily:"inherit",
-  });
   return (
     <>
       <div className="sheet-overlay" onClick={onClose}/>
@@ -314,31 +363,12 @@ function FilterSheet({ typeFilter, setTypeFilter, search, setSearch, category, s
         <div className="sheet-handle"/>
         <div style={{padding:"16px 20px 8px"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-            <span style={{fontSize:16,fontWeight:700,color:"var(--ink)"}}>Filter Transactions</span>
+            <span style={{fontSize:16,fontWeight:700,color:"var(--ink)"}}>More Filters</span>
             <div style={{display:"flex",gap:8}}>
               <button onClick={onClear} style={{fontSize:12,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>Clear all</button>
               <button onClick={onClose} style={{width:30,height:30,borderRadius:99,border:"1px solid var(--border)",background:"var(--bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <Icon d={ICONS.x} size={13} color="var(--ink3)"/>
               </button>
-            </div>
-          </div>
-
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Transaction Type</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {[{value:"all",label:"All"},{value:"debit",label:"💸 Expenses"},{value:"credit",label:"💰 Income"}].map(opt=>(
-                <button key={opt.value} style={chip(typeFilter===opt.value)} onClick={()=>setTypeFilter(opt.value)}>{opt.label}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{marginBottom:20}}>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Search</div>
-            <div style={{position:"relative"}}>
-              <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}><Icon d={ICONS.search} size={14} color="var(--ink4)"/></span>
-              <input placeholder="Search category or merchant…" value={search}
-                onChange={e=>setSearch(e.target.value)} className="inp"
-                style={{paddingLeft:38,width:"100%",padding:"12px 12px 12px 38px",fontSize:14}}/>
             </div>
           </div>
 
@@ -351,7 +381,7 @@ function FilterSheet({ typeFilter, setTypeFilter, search, setSearch, category, s
           </div>
 
           <div style={{marginBottom:24}}>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Date Range</div>
+            <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Custom Date Range</div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:10,color:"var(--ink4)",marginBottom:4,fontWeight:600}}>FROM</div>
@@ -409,13 +439,18 @@ function MobileTxCard({ t, onClick }) {
 function todayStr()    { return new Date().toISOString().slice(0,10); }
 function offsetDay(n)  { const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 function startOfMonth(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
+
 const QUICK_RANGES = [
-  {label:"Today",       from:()=>todayStr(),    to:()=>todayStr()},
-  {label:"Yesterday",   from:()=>offsetDay(-1), to:()=>offsetDay(-1)},
-  {label:"Last 7 days", from:()=>offsetDay(-6), to:()=>todayStr()},
-  {label:"Last 30 days",from:()=>offsetDay(-29),to:()=>todayStr()},
-  {label:"This month",  from:()=>startOfMonth(),to:()=>todayStr()},
+  {label:"All",         from:()=>"",          to:()=>""           },
+  {label:"Today",       from:()=>todayStr(),   to:()=>todayStr()   },
+  {label:"Yesterday",   from:()=>offsetDay(-1),to:()=>offsetDay(-1)},
+  {label:"Last 7 days", from:()=>offsetDay(-6),to:()=>todayStr()   },
+  {label:"Last 30 days",from:()=>offsetDay(-29),to:()=>todayStr()  },
+  {label:"This month",  from:()=>startOfMonth(),to:()=>todayStr()  },
 ];
+
+// Desktop-only quick ranges (no "All" since All is default)
+const DESKTOP_QUICK_RANGES = QUICK_RANGES.slice(1);
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Transactions() {
@@ -434,7 +469,7 @@ export default function Transactions() {
   const [lastSync,     setLastSync]     = useState(null);
   const [spinning,     setSpinning]     = useState(false);
   const [selected,     setSelected]     = useState(null);
-  const [activePreset, setActivePreset] = useState(null);
+  const [activePreset, setActivePreset] = useState("All"); // Default "All" selected
   const [showFilter,   setShowFilter]   = useState(false);
   const [isMobile,     setIsMobile]     = useState(window.innerWidth<=768);
 
@@ -465,14 +500,20 @@ export default function Transactions() {
       const incRes=await fetch(`${API}/api/income/`,{headers});
       const incomes=incRes.ok?await incRes.json():[];
       const tagged=[
+        // /api/expenses/ → always debit
         ...expenses.map(t=>({...t,_type:"debit"})),
-        ...incomes.map(t=>({...t,_type:"credit",category:t.category||t.source||"Income"})),
+        // /api/income/ → always credit, regardless of what category field says
+        ...incomes.map(t=>({...t,_type:"credit"})),
       ];
+      // Sort purely by datetime — IDs are separate sequences per endpoint and must NOT be compared cross-list
       tagged.sort((a,b)=>{
-        if (b.id&&a.id&&b.id!==a.id) return b.id-a.id;
-        const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+"Z");
-        const db=new Date(((b.created_at||b.date||"").replace(" ","T"))+"Z");
-        return db-da;
+        const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+(a.created_at?.includes("Z")||a.created_at?.includes("+")?"":'Z'));
+        const db=new Date(((b.created_at||b.date||"").replace(" ","T"))+(b.created_at?.includes("Z")||b.created_at?.includes("+")?"":'Z'));
+        if (db-da!==0) return db-da;
+        // Tiebreak: if same timestamp, put credit (income) first for visibility
+        if (a._type!==b._type) return a._type==="credit"?-1:1;
+        // Final tiebreak: higher id within same type = newer
+        return (b.id||0)-(a.id||0);
       });
       setAll(tagged);
       setLastSync(new Date());
@@ -487,14 +528,32 @@ export default function Transactions() {
       const q=search.toLowerCase();
       list=list.filter(t=>t.category?.toLowerCase().includes(q)||t.merchant?.toLowerCase().includes(q)||t.source?.toLowerCase().includes(q));
     }
-    if (category) list=list.filter(t=>(t._type==="credit"?"Income":(t.category||""))===category);
+    if (category) list=list.filter(t=>{
+      if (t._type==="credit") return category==="Income"||category===(t.category||t.source||"Income");
+      return (t.category||"Other")===category;
+    });
     if (dateFrom) list=list.filter(t=>{const d=txDate(t);return d&&d>=dateFrom;});
     if (dateTo)   list=list.filter(t=>{const d=txDate(t);return d&&d<=dateTo;});
     setFiltered(list);
   }
 
-  function applyPreset(p){setDateFrom(p.from());setDateTo(p.to());setActivePreset(p.label);}
-  function clearFilters(){setSearch("");setTypeFilter("all");setCategory("");setDateFrom("");setDateTo("");setActivePreset(null);}
+  function applyPreset(p) {
+    const from = p.from();
+    const to   = p.to();
+    setDateFrom(from);
+    setDateTo(to);
+    setActivePreset(p.label);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setTypeFilter("all");
+    setCategory("");
+    setDateFrom("");
+    setDateTo("");
+    setActivePreset("All");
+  }
+
   function logout(){localStorage.removeItem("token");navigate("/",{replace:true});}
 
   const hasFilters = search||typeFilter!=="all"||category||dateFrom||dateTo;
@@ -516,15 +575,21 @@ export default function Transactions() {
   const COLS    = "44px 110px 1fr 110px 100px 180px 90px";
   const HEADERS = ["","Category","Merchant / From","Amount","Type","Date & Time","Source"];
 
+  // Type filter chips for mobile — shown inline always
+  const TYPE_CHIPS = [
+    {value:"all",   label:"All 📋"},
+    {value:"debit", label:"💸 Expenses"},
+    {value:"credit",label:"💰 Income"},
+  ];
+
   return (
     <div style={{display:"flex",minHeight:"100vh"}}>
       <Sidebar onLogout={logout}/>
       <DetailDrawer txn={selected} onClose={()=>setSelected(null)}/>
 
+      {/* Advanced filter sheet - only category + custom date on mobile */}
       {showFilter && isMobile && (
         <FilterSheet
-          typeFilter={typeFilter} setTypeFilter={setTypeFilter}
-          search={search} setSearch={setSearch}
           category={category} setCategory={setCategory}
           dateFrom={dateFrom} setDateFrom={setDateFrom}
           dateTo={dateTo} setDateTo={setDateTo}
@@ -556,8 +621,8 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* Mobile Header */}
-        <div className="mobile-header" style={{background:"var(--sidebar-bg)",padding:"14px 16px 12px",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50}}>
+        {/* ── Mobile Header ── */}
+        <div className="mobile-header" style={{background:"var(--sidebar-bg)",padding:"14px 16px 10px",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:50}}>
           <div>
             <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Sora',sans-serif",lineHeight:1}}>My Transactions</div>
             <div style={{fontSize:11,color:"rgba(255,255,255,.55)",marginTop:2}}>{filtered.length} of {all.length} shown</div>
@@ -567,11 +632,71 @@ export default function Transactions() {
               style={{width:36,height:36,borderRadius:10,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}><Icon d={ICONS.refresh} size={16} color="#fff"/></span>
             </button>
+            {/* Advanced filter button — shows count badge if extra filters active */}
             <button onClick={()=>setShowFilter(true)}
               style={{width:36,height:36,borderRadius:10,border:"1px solid rgba(255,255,255,.2)",background:activeFilterCount>0?"rgba(255,255,255,.25)":"rgba(255,255,255,.1)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
               <Icon d={ICONS.filter} size={16} color="#fff"/>
               {activeFilterCount>0&&<span style={{position:"absolute",top:-3,right:-3,width:15,height:15,borderRadius:"50%",background:"#ef4444",color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{activeFilterCount}</span>}
             </button>
+          </div>
+        </div>
+
+        {/* ── Mobile Search Bar — always visible ── */}
+        <div className="mobile-search-bar" style={{background:"var(--sidebar-bg)",padding:"0 14px 10px",display:"none"}}>
+          <div style={{position:"relative"}}>
+            <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",zIndex:1}}>
+              <Icon d={ICONS.search} size={14} color="rgba(255,255,255,.5)"/>
+            </span>
+            <input
+              placeholder="Search category or merchant…"
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              style={{
+                width:"100%",
+                padding:"10px 12px 10px 36px",
+                borderRadius:10,
+                border:"1.5px solid rgba(255,255,255,.2)",
+                background:"rgba(255,255,255,.12)",
+                color:"#fff",
+                fontSize:13,
+                fontFamily:"inherit",
+                outline:"none",
+              }}
+            />
+            {search&&(
+              <button onClick={()=>setSearch("")}
+                style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}>
+                <Icon d={ICONS.x} size={13} color="rgba(255,255,255,.6)"/>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Mobile Quick Filters — always visible, horizontally scrollable ── */}
+        <div className="mobile-quick-filters" style={{background:"var(--sidebar-bg)",padding:"0 14px 12px",display:"none"}}>
+          {/* Type row */}
+          <div className="chips-scroll" style={{marginBottom:8}}>
+            {TYPE_CHIPS.map(chip=>(
+              <button
+                key={chip.value}
+                className={`chip${typeFilter===chip.value?" active":""}`}
+                onClick={()=>setTypeFilter(chip.value)}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+          {/* Date preset row */}
+          <div className="chips-scroll">
+            {QUICK_RANGES.map(p=>(
+              <button
+                key={p.label}
+                className={`chip${activePreset===p.label?" active":""}`}
+                onClick={()=>applyPreset(p)}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -637,7 +762,7 @@ export default function Transactions() {
                 </div>
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginLeft:4}}>
-                {QUICK_RANGES.map(p=>(
+                {DESKTOP_QUICK_RANGES.map(p=>(
                   <button key={p.label} onClick={()=>applyPreset(p)}
                     style={{padding:"5px 11px",borderRadius:99,fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit",
                       border:activePreset===p.label?"1.5px solid var(--accent)":"1.5px solid var(--border)",
@@ -690,14 +815,17 @@ export default function Transactions() {
 
           {/* Mobile Cards */}
           <div className="mobile-only" style={{flexDirection:"column",gap:10}}>
-            {hasFilters&&(
+            {/* Active filter summary pills */}
+            {(category||(dateFrom&&activePreset!=="All"&&activePreset!==null))&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
-                {typeFilter!=="all"&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--purple-bg)",color:"var(--purple)",border:"1px solid var(--purple-border)"}}>{typeFilter==="debit"?"💸 Expenses":"💰 Income"}</span>}
-                {search&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--blue-bg)",color:"var(--blue)",border:"1px solid var(--blue-border)"}}>"{search}"</span>}
                 {category&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--amber-bg)",color:"var(--amber)",border:"1px solid var(--amber-border)"}}>{category}</span>}
+                {dateFrom&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--purple-bg)",color:"var(--purple)",border:"1px solid var(--purple-border)"}}>
+                  {activePreset||`${dateFrom} → ${dateTo}`}
+                </span>}
                 <button onClick={clearFilters} style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--red-bg)",color:"var(--red)",border:"1px solid var(--red-border)",cursor:"pointer",fontFamily:"inherit"}}>Clear ✕</button>
               </div>
             )}
+
             {filtered.length===0?(
               <div style={{background:"var(--surface)",borderRadius:14,padding:"48px 20px",textAlign:"center",border:"1px solid var(--border)"}}>
                 <div style={{fontSize:32,marginBottom:8}}>🔍</div>
