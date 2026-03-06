@@ -678,7 +678,7 @@ export default function Dashboard() {
               {/* Alerts */}
               {alerts.length>0&&(
                 <div className="card f4" style={{padding:"16px"}}>
-                  <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🔔 Heads up!</div>
+                  <div style={{fontSize:13,fontWeight:600,marginBottom:10}}>🔔 Heads up</div>
                   {alerts.map((a,i)=>(
                     <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:i<alerts.length-1?"1px solid var(--border)":"none"}}>
                       <Ico d={IC.warn} s={13} c={a.level==="high"?"var(--red)":"var(--amber)"}/>
