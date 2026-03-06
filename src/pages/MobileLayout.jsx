@@ -1,5 +1,5 @@
 // MobileLayout.jsx — Shared mobile shell with bottom navigation
-// Drop-in replacement for the desktop Sidebar across all pages
+// Matches Dashboard.jsx mobile design: dark purple header + bottom nav
 
 import { useState, useEffect } from "react";
 
@@ -23,15 +23,24 @@ const MOBILE_CSS = `
     --ink4:        #a8a5be;
     --green:       #00c07a;
     --green-bg:    #e6faf3;
+    --green-border:#a7f3d0;
     --red:         #f03e3e;
     --red-bg:      #fff0f0;
+    --red-border:  #fecaca;
     --amber:       #f59f00;
     --amber-bg:    #fff9e6;
+    --amber-border:#fde68a;
     --blue:        #3b82f6;
     --blue-bg:     #eff6ff;
-    --nav-h:       68px;
-    --header-h:    60px;
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --blue-border: #bfdbfe;
+
+    /* ── Dashboard shell colours ── */
+    --sb:          #2d1b69;
+    --sb-muted:    rgba(255,255,255,0.38);
+
+    --nav-h:        60px;
+    --header-h:     56px;
+    --safe-bottom:  env(safe-area-inset-bottom, 0px);
   }
 
   html, body {
@@ -42,19 +51,17 @@ const MOBILE_CSS = `
     overscroll-behavior: none;
   }
 
-  /* ── Scrollbar ── */
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
   /* ── Animations ── */
-  @keyframes fadeUp   { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
-  @keyframes spin     { to{transform:rotate(360deg)} }
-  @keyframes pop      { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
-  @keyframes slideUp  { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
-  @keyframes slideRight{from{transform:translateX(100%)} to{transform:translateX(0)}}
-  @keyframes pulse    { 0%,100%{opacity:1} 50%{opacity:.35} }
-  @keyframes dot-bounce{ 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
+  @keyframes fadeUp    { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+  @keyframes spin      { to{transform:rotate(360deg)} }
+  @keyframes pop       { 0%{transform:scale(.9);opacity:0} 100%{transform:scale(1);opacity:1} }
+  @keyframes slideUp   { from{transform:translateY(100%);opacity:0} to{transform:translateY(0);opacity:1} }
+  @keyframes slideRight{ from{transform:translateX(100%)} to{transform:translateX(0)} }
+  @keyframes pulse     { 0%,100%{opacity:1} 50%{opacity:.35} }
 
   .fu0 { animation: fadeUp .35s ease both; }
   .fu1 { animation: fadeUp .35s .06s ease both; }
@@ -95,8 +102,8 @@ const MOBILE_CSS = `
     transition: transform .12s, opacity .12s;
     -webkit-tap-highlight-color: transparent;
   }
-  .btn-primary:active { transform: scale(.97); }
-  .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  .btn-primary:active  { transform: scale(.97); }
+  .btn-primary:disabled{ opacity: .5; cursor: not-allowed; transform: none; }
 
   /* ── Cards ── */
   .card {
@@ -114,21 +121,20 @@ const MOBILE_CSS = `
     padding: 12px 14px;
   }
 
-  /* ── Bottom nav ── */
+  /* ── Bottom nav — dark purple, matches Dashboard ── */
   .bottom-nav {
+    display: none;
     position: fixed;
-    bottom: 0;
-    left: 0; right: 0;
-    height: calc(var(--nav-h) + var(--safe-bottom));
-    padding-bottom: var(--safe-bottom);
-    background: rgba(255,255,255,.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-top: 1px solid var(--border);
-    display: flex;
+    bottom: 0; left: 0; right: 0;
+    z-index: 300;
+    height: var(--nav-h);
+    background: var(--sb);
+    border-top: 1px solid rgba(255,255,255,.1);
     align-items: center;
-    justify-content: space-around;
-    z-index: 100;
+    justify-content: space-between;
+    padding: 0 4px;
+    padding-bottom: var(--safe-bottom);
+    overflow: hidden;
   }
 
   .nav-item {
@@ -136,42 +142,51 @@ const MOBILE_CSS = `
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    padding: 6px 10px;
-    border-radius: 12px;
-    cursor: pointer;
+    padding: 6px 4px;
+    border-radius: 10px;
     text-decoration: none;
+    color: rgba(255,255,255,.45);
+    font-size: 9px;
+    font-weight: 600;
+    transition: all .18s;
+    min-width: 0;
+    flex: 1;
     -webkit-tap-highlight-color: transparent;
-    transition: background .12s;
     position: relative;
-    min-width: 48px;
   }
-  .nav-item.active { background: var(--brand-soft); }
-  .nav-item .nav-icon { font-size: 18px; transition: transform .12s; }
-  .nav-item .nav-label { font-size: 9px; font-weight: 600; color: var(--ink4); letter-spacing: .2px; }
-  .nav-item.active .nav-label { color: var(--brand); }
-  .nav-item:active .nav-icon { transform: scale(.88); }
+  .nav-item.active {
+    color: #fff;
+    background: rgba(255,255,255,.16);
+  }
+  .nav-item .nav-label { font-size: 9px; font-weight: 600; color: inherit; line-height: 1; }
 
-  /* ── Header ── */
+  /* ── Mobile header — dark purple sticky bar, matches Dashboard ── */
   .mobile-header {
+    display: none;
+    background: var(--sb);
+    padding: 12px 16px;
+    align-items: center;
+    justify-content: space-between;
     position: sticky;
     top: 0;
-    z-index: 90;
-    background: rgba(255,255,255,.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border-bottom: 1px solid var(--border);
-    height: var(--header-h);
-    display: flex;
-    align-items: center;
-    padding: 0 18px;
-    justify-content: space-between;
+    z-index: 100;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgba(255,255,255,.08);
   }
 
-  /* ── Page scroll area ── */
+  /* ── Responsive: show mobile chrome on small screens ── */
+  @media (max-width: 900px) {
+    .bottom-nav    { display: flex !important; }
+    .mobile-header { display: flex !important; }
+    .page-scroll   { padding-bottom: calc(var(--nav-h) + 20px + var(--safe-bottom)) !important; }
+  }
+
+  /* ── Page scroll ── */
   .page-scroll {
-    padding: 16px 16px calc(var(--nav-h) + 24px + var(--safe-bottom)) 16px;
+    padding: 16px 16px 28px;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    flex: 1;
   }
 
   /* ── Badge ── */
@@ -185,7 +200,7 @@ const MOBILE_CSS = `
     font-weight: 600;
   }
 
-  /* ── Toast ── */
+  /* ── Toast — sits above bottom nav ── */
   .toast {
     position: fixed;
     bottom: calc(var(--nav-h) + 12px + var(--safe-bottom));
@@ -209,7 +224,7 @@ const MOBILE_CSS = `
     animation: spin .7s linear infinite;
   }
 
-  /* ── Overlay / drawer ── */
+  /* ── Drawer / Sheet ── */
   .drawer-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,.45);
@@ -218,8 +233,7 @@ const MOBILE_CSS = `
     backdrop-filter: blur(2px);
   }
   .drawer {
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     z-index: 151;
     display: flex;
     align-items: flex-end;
@@ -265,13 +279,7 @@ const MOBILE_CSS = `
     margin-bottom: 10px;
   }
 
-  /* ── Tap highlight ── */
-  .tap { -webkit-tap-highlight-color: transparent; }
-
-  /* ── Number display ── */
-  .num { font-family: 'Sora', monospace; }
-
-  /* ── Quick chip ── */
+  /* ── Chip (pill button) ── */
   .chip {
     padding: 6px 14px;
     border-radius: 99px;
@@ -290,12 +298,16 @@ const MOBILE_CSS = `
     background: var(--brand-soft);
     color: var(--brand);
   }
+
+  .tap { -webkit-tap-highlight-color: transparent; }
+  .num { font-family: 'Sora', monospace; }
 `;
 
 export function injectMobileCSS() {
   if (typeof document === "undefined" || document.getElementById("__mobile_v1__")) return;
   const s = document.createElement("style");
-  s.id = "__mobile_v1__"; s.textContent = MOBILE_CSS;
+  s.id = "__mobile_v1__";
+  s.textContent = MOBILE_CSS;
   document.head.appendChild(s);
 }
 
@@ -309,7 +321,6 @@ export const CAT_EMOJI = {
   Rent:"🏠", Other:"💳",
 };
 
-// SVG Icon component
 export const Icon = ({ d, size = 18, color = "currentColor", strokeWidth = 2 }) => (
   <svg width={size} height={size} viewBox="0 0 24 23" fill="none"
     stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
@@ -340,59 +351,81 @@ export const ICONS = {
   income:   "M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6",
 };
 
-// ── NAV CONFIG ───────────────────────────────────────────────────────────────
+// ── Nav items — SVG icons, matches screenshot exactly ─────────────────────────
 const NAV_ITEMS = [
-  { to: "/dashboard",             emoji: "🏠", label: "Home"      },
-  { to: "/transactions",          emoji: "💳", label: "Spends"    },
-//   { to: "/add-expense",           emoji: "➕", label: "Add"       },
-  { to: "/analytics",             emoji: "📊", label: "Analytics" },
-  { to: "/budgets",               emoji: "💰", label: "Budgets"   },
-  { to: "/goals",                 emoji: "🎯", label: "Goals"     },
-  { to: "/detected-transactions", emoji: "📱", label: "SMS"       },
-  { to: "/reminders",             emoji: "🔔", label: "Reminders" },
+  { to: "/dashboard",             label: "Home",      icon: "home"     },
+  { to: "/transactions",          label: "Spends",    icon: "tx"       },
+  { to: "/analytics",             label: "Analytics", icon: "analytics"},
+  { to: "/budgets",               label: "Budgets",   icon: "budget"   },
+  { to: "/goals",                 label: "Goals",     icon: "goals"    },
+  { to: "/detected-transactions", label: "SMS",       icon: "detect"   },
+  { to: "/reminders",             label: "Reminders", icon: "reminder" },
 ];
 
-// ── Bottom Navigation ────────────────────────────────────────────────────────
+// ── Bottom Navigation — dark purple + SVG icons, matches screenshot ───────────
 export function BottomNav({ pendingCount = 0 }) {
   const path = window.location.pathname;
   return (
     <nav className="bottom-nav">
-      {NAV_ITEMS.map(item => (
-        <a key={item.to} href={item.to}
-          className={`nav-item tap${path === item.to ? " active" : ""}`}>
-          <span className="nav-icon" style={{ position: "relative" }}>
-            {item.emoji}
-            {item.to === "/detected-transactions" && pendingCount > 0 && (
-              <span style={{
-                position: "absolute", top: -4, right: -6,
-                background: "#f03e3e", color: "#fff",
-                fontSize: 9, fontWeight: 700, borderRadius: 99,
-                padding: "1px 4px", minWidth: 14, textAlign: "center",
-                lineHeight: "14px",
-              }}>{pendingCount}</span>
-            )}
-          </span>
-          <span className="nav-label">{item.label}</span>
-        </a>
-      ))}
+      {NAV_ITEMS.map(item => {
+        const active = path === item.to;
+        return (
+          <a key={item.to} href={item.to}
+            className={`nav-item tap${active ? " active" : ""}`}>
+            <span style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon
+                d={ICONS[item.icon]}
+                size={20}
+                color={active ? "#fff" : "rgba(255,255,255,.45)"}
+                strokeWidth={active ? 2.5 : 1.8}
+              />
+              {item.to === "/detected-transactions" && pendingCount > 0 && (
+                <span style={{
+                  position: "absolute", top: -4, right: -7,
+                  background: "#ef4444", color: "#fff",
+                  fontSize: 8, fontWeight: 700, borderRadius: 99,
+                  padding: "1px 4px", lineHeight: 1,
+                }}>{pendingCount}</span>
+              )}
+            </span>
+            <span className="nav-label">{item.label}</span>
+          </a>
+        );
+      })}
     </nav>
   );
 }
 
-// ── Mobile Header ────────────────────────────────────────────────────────────
+// ── Mobile Header — dark purple sticky bar, matches Dashboard.jsx ─────────────
 export function MobileHeader({ title, subtitle, right, back, onBack }) {
   return (
     <div className="mobile-header">
       <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
         {back && (
-          <button onClick={onBack || (() => window.history.back())}
-            style={{ width: 36, height: 36, borderRadius: 10, border: "1.5px solid var(--border)", background: "var(--surface)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-            <Icon d={ICONS.back} size={16} color="var(--ink3)" />
+          <button
+            onClick={onBack || (() => window.history.back())}
+            style={{
+              width: 34, height: 34, borderRadius: 9,
+              border: "1px solid rgba(255,255,255,.25)",
+              background: "rgba(255,255,255,.12)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0,
+            }}>
+            <Icon d={ICONS.back} size={16} color="rgba(255,255,255,.9)" />
           </button>
         )}
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ink)", fontFamily: "'Sora', sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 12, color: "var(--ink4)", marginTop: 1 }}>{subtitle}</div>}
+          <div style={{
+            fontSize: 16, fontWeight: 800, color: "#fff",
+            lineHeight: 1.1, letterSpacing: "-.3px",
+            fontFamily: "'Sora', sans-serif",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{title}</div>
+          {subtitle && (
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,.5)", marginTop: 1 }}>
+              {subtitle}
+            </div>
+          )}
         </div>
       </div>
       {right && <div style={{ flexShrink: 0 }}>{right}</div>}
@@ -400,12 +433,11 @@ export function MobileHeader({ title, subtitle, right, back, onBack }) {
   );
 }
 
-// ── Page Shell ───────────────────────────────────────────────────────────────
+// ── Page Shell ────────────────────────────────────────────────────────────────
 export function MobilePage({ children, pendingCount = 0, noPad }) {
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
-      <div style={{ flex: 1, flexDirection: "column", overflow: "hidden", paddingBottom: "calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px))" }}
-        className={noPad ? "" : ""}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {children}
       </div>
       <BottomNav pendingCount={pendingCount} />
@@ -413,7 +445,7 @@ export function MobilePage({ children, pendingCount = 0, noPad }) {
   );
 }
 
-// ── Loading Screen ───────────────────────────────────────────────────────────
+// ── Loading Screen ────────────────────────────────────────────────────────────
 export function LoadingScreen({ text = "Loading…" }) {
   return (
     <div style={{ display: "flex", height: "100vh", alignItems: "center", justifyContent: "center", background: "var(--bg)", flexDirection: "column", gap: 14 }}>
@@ -423,7 +455,7 @@ export function LoadingScreen({ text = "Loading…" }) {
   );
 }
 
-// ── Toast ────────────────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
 export function Toast({ text, ok }) {
   return (
     <div className="toast" style={{ background: ok ? "var(--green)" : "var(--red)" }}>
@@ -432,7 +464,7 @@ export function Toast({ text, ok }) {
   );
 }
 
-// ── Stat Card ────────────────────────────────────────────────────────────────
+// ── Stat Card ─────────────────────────────────────────────────────────────────
 export function StatCard({ label, value, icon, iconBg, sub, change, ani = "fu0", small }) {
   const pos = change >= 0;
   return (
