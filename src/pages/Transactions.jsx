@@ -41,6 +41,8 @@ const CSS = `
   .pulse { animation:pulse 2s infinite; }
   .drawer  { animation:slideRight .22s ease both; }
   .overlay { animation:fadeBack .2s ease both; }
+  .tx-card { transition:transform .1s,box-shadow .15s; }
+  .tx-card:active { transform:scale(.99); box-shadow:0 2px 12px rgba(0,0,0,.1); }
 
   /* Layout switching */
   .desktop-sidebar { display:flex; }
@@ -90,8 +92,6 @@ const CSS = `
     padding-bottom:env(safe-area-inset-bottom,16px);
   }
   .sheet-handle { width:38px; height:4px; background:var(--border); border-radius:99px; margin:10px auto 0; }
-  .tx-card { transition:transform .1s,box-shadow .15s; }
-  .tx-card:active { transform:scale(.99); box-shadow:0 2px 12px rgba(0,0,0,.1); }
 
   /* Mobile quick filter bar */
   .mobile-quick-filters {
@@ -115,33 +115,17 @@ const CSS = `
 
   /* Horizontal scroll chips */
   .chips-scroll {
-    display:flex;
-    gap:6px;
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
-    padding-bottom:2px;
+    display:flex; gap:6px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-bottom:2px;
   }
   .chips-scroll::-webkit-scrollbar { display:none; }
   .chip {
-    flex-shrink:0;
-    padding:6px 14px;
-    border-radius:99px;
-    font-size:12px;
-    font-weight:600;
-    cursor:pointer;
-    font-family:var(--font);
-    border:1.5px solid rgba(255,255,255,.2);
-    background:rgba(255,255,255,.1);
-    color:rgba(255,255,255,.75);
-    transition:all .15s;
-    white-space:nowrap;
+    flex-shrink:0; padding:6px 14px; border-radius:99px; font-size:12px; font-weight:600;
+    cursor:pointer; font-family:var(--font); border:1.5px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.1); color:rgba(255,255,255,.75);
+    transition:all .15s; white-space:nowrap;
   }
-  .chip.active {
-    background:#fff;
-    color:var(--accent);
-    border-color:#fff;
-  }
+  .chip.active { background:#fff; color:var(--accent); border-color:#fff; }
 `;
 
 function injectCSS() {
@@ -241,7 +225,7 @@ function Sidebar({ onLogout }) {
   );
 }
 
-function BottomNav() {
+function BottomNavBar() {
   const location = useLocation();
   const path = location.pathname;
   return (
@@ -272,17 +256,12 @@ function txDate(t) {
 }
 
 function getTxDisplay(t) {
-  // Trust _type as the source of truth (set from which API endpoint it came from)
   const isCredit = t._type==="credit";
   const auto     = isAutoTx(t);
-  // Income: category is always "Income"; merchant/from is the sender name/source
-  // Expense: category is the expense category; merchant is the merchant name
-  const category = isCredit
-    ? "Income"
-    : (t.category||t.category_guess||"Other");
+  const category = isCredit?"Income":(t.category||t.category_guess||"Other");
   const merchant = isCredit
-    ? (t.source||t.merchant||t.merchant_name||t.description||null)
-    : (t.merchant||t.merchant_name||t.description||null);
+    ?(t.source||t.merchant||t.merchant_name||t.description||null)
+    :(t.merchant||t.merchant_name||t.description||null);
   const dateStr  = fmtDateTime(t.created_at||t.date);
   const accentColor = isCredit?"var(--green)":"var(--red)";
   const accentBg    = isCredit?"var(--green-bg)":"var(--red-bg)";
@@ -291,19 +270,19 @@ function getTxDisplay(t) {
   return {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor};
 }
 
-// ── Detail Drawer ─────────────────────────────────────────────────────────────
+/* ─── Detail Drawer ──────────────────────────────────────────────────────── */
 function DetailDrawer({ txn, onClose }) {
   if (!txn) return null;
   const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder} = getTxDisplay(txn);
 
   const rows = [
-    {emoji:"🏷️",label:"Type",          value:isCredit?"💰 Income / Credit":"💸 Expense / Debit"},
-    {emoji:"📂",label:"Category",       value:category},
-    {emoji:"🏪",label:"Merchant / From",value:merchant||"—"},
-    {emoji:"💵",label:"Amount",         value:(isCredit?"+":"−")+" ₹"+fmt(txn.amount)},
-    {emoji:"📅",label:"Date & Time",    value:dateStr},
-    {emoji:"📲",label:"Source",         value:auto?"Auto-detected from SMS":"Added manually"},
-    {emoji:"🔢",label:"Transaction ID", value:"#"+txn.id},
+    {emoji:"🏷️",label:"Type",           value:isCredit?"💰 Income / Credit":"💸 Expense / Debit"},
+    {emoji:"📂",label:"Category",        value:category},
+    {emoji:"🏪",label:"Merchant / From", value:merchant||"—"},
+    {emoji:"💵",label:"Amount",          value:(isCredit?"+":"−")+" ₹"+fmt(txn.amount)},
+    {emoji:"📅",label:"Date & Time",     value:dateStr},
+    {emoji:"📲",label:"Source",          value:auto?"Auto-detected from SMS":"Added manually"},
+    {emoji:"🔢",label:"Transaction ID",  value:"#"+txn.id},
   ];
 
   return (
@@ -323,8 +302,7 @@ function DetailDrawer({ txn, onClose }) {
           </div>
           <div style={{fontSize:12,color:"var(--ink3)",marginBottom:10}}>{category}{merchant?" · "+merchant:""}</div>
           <div style={{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
-            <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,
-              background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`}}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`}}>
               {isCredit?"💰 Income":"💸 Expense"}
             </span>
             <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,
@@ -353,7 +331,7 @@ function DetailDrawer({ txn, onClose }) {
   );
 }
 
-// ── Mobile Filter Sheet (advanced: category + date range) ─────────────────────
+/* ─── Mobile Filter Sheet ────────────────────────────────────────────────── */
 function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo, onClose, onClear }) {
   const CATEGORIES = ["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Income","Salary","Other"];
   return (
@@ -371,7 +349,6 @@ function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, set
               </button>
             </div>
           </div>
-
           <div style={{marginBottom:20}}>
             <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Category</div>
             <select value={category} onChange={e=>setCategory(e.target.value)} className="inp" style={{width:"100%",padding:"12px",fontSize:14}}>
@@ -379,7 +356,6 @@ function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, set
               {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-
           <div style={{marginBottom:24}}>
             <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Custom Date Range</div>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -394,7 +370,6 @@ function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, set
               </div>
             </div>
           </div>
-
           <button onClick={onClose} style={{width:"100%",padding:"14px",borderRadius:10,background:"var(--accent)",border:"none",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:8}}>
             Apply Filters
           </button>
@@ -404,24 +379,53 @@ function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, set
   );
 }
 
-// ── Mobile Transaction Card ───────────────────────────────────────────────────
+/* ─── Mobile Transaction Card — FIXED: now shows date AND time ────────────── */
 function MobileTxCard({ t, onClick }) {
   const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor} = getTxDisplay(t);
+
+  // Split "07 Mar 2026, 05:27 pm" → date part + time part
+  const dateParts = dateStr.split(",");
+  const datePart  = dateParts[0]?.trim() || dateStr;
+  const timePart  = dateParts.slice(1).join(",").trim();
+
   return (
     <div className="tx-card" onClick={onClick}
-      style={{background:"var(--surface)",borderRadius:12,padding:"14px",border:"1px solid var(--border)",borderLeft:`4px solid ${borderColor}`,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-      <div style={{width:44,height:44,borderRadius:11,background:accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
+      style={{background:"var(--surface)",borderRadius:12,padding:"13px 14px",border:"1px solid var(--border)",borderLeft:`4px solid ${borderColor}`,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+
+      {/* Icon */}
+      <div style={{width:42,height:42,borderRadius:11,background:accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
         {CAT_EMOJI[category]||(isCredit?"💰":"💳")}
       </div>
+
+      {/* Content */}
       <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"50%"}}>{category}</div>
-          <div style={{fontSize:16,fontWeight:800,color:accentColor,fontFamily:"'Sora',sans-serif",letterSpacing:"-0.3px"}}>{isCredit?"+":"−"}₹{fmt(t.amount)}</div>
+        {/* Row 1: category + amount */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+          <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"52%"}}>
+            {category}
+          </div>
+          <div style={{fontSize:15,fontWeight:800,color:accentColor,fontFamily:"'Sora',sans-serif",letterSpacing:"-0.3px",flexShrink:0}}>
+            {isCredit?"+":"−"}₹{fmt(t.amount)}
+          </div>
         </div>
-        <div style={{fontSize:12,color:"var(--ink3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:5}}>{merchant||"—"}</div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <span style={{fontSize:10,color:"var(--ink4)"}}>{dateStr.split(",")[0]}</span>
-          <div style={{display:"flex",gap:4}}>
+
+        {/* Row 2: merchant */}
+        <div style={{fontSize:12,color:"var(--ink3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:5}}>
+          {merchant||"—"}
+        </div>
+
+        {/* Row 3: date+time on left, badges on right */}
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
+          {/* ✅ FIX: show both date AND time */}
+          <div style={{display:"flex",flexDirection:"column",gap:1}}>
+            <span style={{fontSize:10,color:"var(--ink4)",fontWeight:500}}>{datePart}</span>
+            {timePart && (
+              <span style={{fontSize:10,color:"var(--ink4)"}}>{timePart}</span>
+            )}
+          </div>
+
+          {/* Badges */}
+          <div style={{display:"flex",gap:4,flexShrink:0}}>
             <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:9,padding:"1px 6px"}}>
               {isCredit?"💰 Income":"💸 Expense"}
             </span>
@@ -435,24 +439,22 @@ function MobileTxCard({ t, onClick }) {
   );
 }
 
-// ── Quick date presets ────────────────────────────────────────────────────────
-function todayStr()    { return new Date().toISOString().slice(0,10); }
-function offsetDay(n)  { const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
-function startOfMonth(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
+/* ─── Quick date presets ─────────────────────────────────────────────────── */
+function todayStr()     { return new Date().toISOString().slice(0,10); }
+function offsetDay(n)   { const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function startOfMonth() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; }
 
 const QUICK_RANGES = [
-  {label:"All",         from:()=>"",          to:()=>""           },
-  {label:"Today",       from:()=>todayStr(),   to:()=>todayStr()   },
-  {label:"Yesterday",   from:()=>offsetDay(-1),to:()=>offsetDay(-1)},
-  {label:"Last 7 days", from:()=>offsetDay(-6),to:()=>todayStr()   },
-  {label:"Last 30 days",from:()=>offsetDay(-29),to:()=>todayStr()  },
-  {label:"This month",  from:()=>startOfMonth(),to:()=>todayStr()  },
+  {label:"All",         from:()=>"",           to:()=>""           },
+  {label:"Today",       from:()=>todayStr(),    to:()=>todayStr()   },
+  {label:"Yesterday",   from:()=>offsetDay(-1), to:()=>offsetDay(-1)},
+  {label:"Last 7 days", from:()=>offsetDay(-6), to:()=>todayStr()   },
+  {label:"Last 30 days",from:()=>offsetDay(-29),to:()=>todayStr()   },
+  {label:"This month",  from:()=>startOfMonth(),to:()=>todayStr()   },
 ];
-
-// Desktop-only quick ranges (no "All" since All is default)
 const DESKTOP_QUICK_RANGES = QUICK_RANGES.slice(1);
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+/* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function Transactions() {
   injectCSS();
   const navigate = useNavigate();
@@ -469,7 +471,7 @@ export default function Transactions() {
   const [lastSync,     setLastSync]     = useState(null);
   const [spinning,     setSpinning]     = useState(false);
   const [selected,     setSelected]     = useState(null);
-  const [activePreset, setActivePreset] = useState("All"); // Default "All" selected
+  const [activePreset, setActivePreset] = useState("All");
   const [showFilter,   setShowFilter]   = useState(false);
   const [isMobile,     setIsMobile]     = useState(window.innerWidth<=768);
 
@@ -500,19 +502,14 @@ export default function Transactions() {
       const incRes=await fetch(`${API}/api/income/`,{headers});
       const incomes=incRes.ok?await incRes.json():[];
       const tagged=[
-        // /api/expenses/ → always debit
         ...expenses.map(t=>({...t,_type:"debit"})),
-        // /api/income/ → always credit, regardless of what category field says
         ...incomes.map(t=>({...t,_type:"credit"})),
       ];
-      // Sort purely by datetime — IDs are separate sequences per endpoint and must NOT be compared cross-list
       tagged.sort((a,b)=>{
         const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+(a.created_at?.includes("Z")||a.created_at?.includes("+")?"":'Z'));
         const db=new Date(((b.created_at||b.date||"").replace(" ","T"))+(b.created_at?.includes("Z")||b.created_at?.includes("+")?"":'Z'));
         if (db-da!==0) return db-da;
-        // Tiebreak: if same timestamp, put credit (income) first for visibility
         if (a._type!==b._type) return a._type==="credit"?-1:1;
-        // Final tiebreak: higher id within same type = newer
         return (b.id||0)-(a.id||0);
       });
       setAll(tagged);
@@ -538,30 +535,30 @@ export default function Transactions() {
   }
 
   function applyPreset(p) {
-    const from = p.from();
-    const to   = p.to();
-    setDateFrom(from);
-    setDateTo(to);
+    setDateFrom(p.from());
+    setDateTo(p.to());
     setActivePreset(p.label);
   }
 
   function clearFilters() {
-    setSearch("");
-    setTypeFilter("all");
-    setCategory("");
-    setDateFrom("");
-    setDateTo("");
-    setActivePreset("All");
+    setSearch(""); setTypeFilter("all"); setCategory("");
+    setDateFrom(""); setDateTo(""); setActivePreset("All");
   }
 
   function logout(){localStorage.removeItem("token");navigate("/",{replace:true});}
 
-  const hasFilters = search||typeFilter!=="all"||category||dateFrom||dateTo;
-  const totalDebit  = filtered.filter(t=>t._type==="debit") .reduce((s,t)=>s+t.amount,0);
-  const totalCredit = filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+t.amount,0);
-  const debitCount  = filtered.filter(t=>t._type==="debit").length;
-  const creditCount = filtered.filter(t=>t._type==="credit").length;
+  const hasFilters      = search||typeFilter!=="all"||category||dateFrom||dateTo;
+  const totalDebit      = filtered.filter(t=>t._type==="debit") .reduce((s,t)=>s+t.amount,0);
+  const totalCredit     = filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+t.amount,0);
+  const debitCount      = filtered.filter(t=>t._type==="debit").length;
+  const creditCount     = filtered.filter(t=>t._type==="credit").length;
   const activeFilterCount = [search,typeFilter!=="all",category,dateFrom,dateTo].filter(Boolean).length;
+
+  const TYPE_CHIPS = [
+    {value:"all",   label:"All 📋"},
+    {value:"debit", label:"💸 Expenses"},
+    {value:"credit",label:"💰 Income"},
+  ];
 
   if (loading) return (
     <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}>
@@ -575,19 +572,11 @@ export default function Transactions() {
   const COLS    = "44px 110px 1fr 110px 100px 180px 90px";
   const HEADERS = ["","Category","Merchant / From","Amount","Type","Date & Time","Source"];
 
-  // Type filter chips for mobile — shown inline always
-  const TYPE_CHIPS = [
-    {value:"all",   label:"All 📋"},
-    {value:"debit", label:"💸 Expenses"},
-    {value:"credit",label:"💰 Income"},
-  ];
-
   return (
     <div style={{display:"flex",minHeight:"100vh"}}>
       <Sidebar onLogout={logout}/>
       <DetailDrawer txn={selected} onClose={()=>setSelected(null)}/>
 
-      {/* Advanced filter sheet - only category + custom date on mobile */}
       {showFilter && isMobile && (
         <FilterSheet
           category={category} setCategory={setCategory}
@@ -600,7 +589,7 @@ export default function Transactions() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-        {/* Desktop Header */}
+        {/* ── Desktop Header ── */}
         <div className="desktop-header" style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"16px 28px",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"var(--ink)",fontFamily:"'Sora',sans-serif"}}>My Transactions</div>
@@ -632,7 +621,6 @@ export default function Transactions() {
               style={{width:36,height:36,borderRadius:10,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
               <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}><Icon d={ICONS.refresh} size={16} color="#fff"/></span>
             </button>
-            {/* Advanced filter button — shows count badge if extra filters active */}
             <button onClick={()=>setShowFilter(true)}
               style={{width:36,height:36,borderRadius:10,border:"1px solid rgba(255,255,255,.2)",background:activeFilterCount>0?"rgba(255,255,255,.25)":"rgba(255,255,255,.1)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
               <Icon d={ICONS.filter} size={16} color="#fff"/>
@@ -641,7 +629,7 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* ── Mobile Search Bar — always visible ── */}
+        {/* ── Mobile Search Bar ── */}
         <div className="mobile-search-bar" style={{background:"var(--sidebar-bg)",padding:"0 14px 10px",display:"none"}}>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",zIndex:1}}>
@@ -651,17 +639,7 @@ export default function Transactions() {
               placeholder="Search category or merchant…"
               value={search}
               onChange={e=>setSearch(e.target.value)}
-              style={{
-                width:"100%",
-                padding:"10px 12px 10px 36px",
-                borderRadius:10,
-                border:"1.5px solid rgba(255,255,255,.2)",
-                background:"rgba(255,255,255,.12)",
-                color:"#fff",
-                fontSize:13,
-                fontFamily:"inherit",
-                outline:"none",
-              }}
+              style={{width:"100%",padding:"10px 12px 10px 36px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.12)",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}
             />
             {search&&(
               <button onClick={()=>setSearch("")}
@@ -672,46 +650,38 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* ── Mobile Quick Filters — always visible, horizontally scrollable ── */}
+        {/* ── Mobile Quick Filters ── */}
         <div className="mobile-quick-filters" style={{background:"var(--sidebar-bg)",padding:"0 14px 12px",display:"none"}}>
-          {/* Type row */}
           <div className="chips-scroll" style={{marginBottom:8}}>
             {TYPE_CHIPS.map(chip=>(
-              <button
-                key={chip.value}
-                className={`chip${typeFilter===chip.value?" active":""}`}
-                onClick={()=>setTypeFilter(chip.value)}
-              >
+              <button key={chip.value} className={`chip${typeFilter===chip.value?" active":""}`} onClick={()=>setTypeFilter(chip.value)}>
                 {chip.label}
               </button>
             ))}
           </div>
-          {/* Date preset row */}
           <div className="chips-scroll">
             {QUICK_RANGES.map(p=>(
-              <button
-                key={p.label}
-                className={`chip${activePreset===p.label?" active":""}`}
-                onClick={()=>applyPreset(p)}
-              >
+              <button key={p.label} className={`chip${activePreset===p.label?" active":""}`} onClick={()=>applyPreset(p)}>
                 {p.label}
               </button>
             ))}
           </div>
         </div>
 
+        {/* ── Page Content ── */}
         <div className="main-scroll" style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"var(--bg)"}}>
 
           {/* Summary cards */}
           <div className="summary-grid fade" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
             {[
-              {label:"Total",         val:filtered.length,         sub:"transactions",                col:"var(--ink)",   bg:"var(--surface)"},
-              {label:"Total income",  val:"₹"+fmt(totalCredit),    sub:creditCount+" entries",        col:"var(--green)", bg:"var(--green-bg)"},
-              {label:"Total expenses",val:"₹"+fmt(totalDebit),     sub:debitCount+" entries",         col:"var(--red)",   bg:"var(--red-bg)"},
-              {label:"Net balance",   val:(totalCredit>=totalDebit?"+":"-")+"₹"+fmt(Math.abs(totalCredit-totalDebit)),
-                                      sub:totalCredit>=totalDebit?"More in 🎉":"More out ⚠️",
-                                      col:totalCredit>=totalDebit?"var(--green)":"var(--red)",
-                                      bg:totalCredit>=totalDebit?"var(--green-bg)":"var(--red-bg)"},
+              {label:"Total",          val:filtered.length,       sub:"transactions",                 col:"var(--ink)",   bg:"var(--surface)"},
+              {label:"Total income",   val:"₹"+fmt(totalCredit),  sub:creditCount+" entries",         col:"var(--green)", bg:"var(--green-bg)"},
+              {label:"Total expenses", val:"₹"+fmt(totalDebit),   sub:debitCount+" entries",          col:"var(--red)",   bg:"var(--red-bg)"},
+              {label:"Net balance",
+               val:(totalCredit>=totalDebit?"+":"-")+"₹"+fmt(Math.abs(totalCredit-totalDebit)),
+               sub:totalCredit>=totalDebit?"More in 🎉":"More out ⚠️",
+               col:totalCredit>=totalDebit?"var(--green)":"var(--red)",
+               bg:totalCredit>=totalDebit?"var(--green-bg)":"var(--red-bg)"},
             ].map(s=>(
               <div key={s.label} style={{background:s.bg,border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:10,fontWeight:600,color:"var(--ink3)",marginBottom:6}}>{s.label}</div>
@@ -721,7 +691,7 @@ export default function Transactions() {
             ))}
           </div>
 
-          {/* Desktop filter */}
+          {/* Desktop filter bar */}
           <div className="f1 desktop-only" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 18px",marginBottom:12,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
             <div style={{display:"flex",gap:10,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
               <div style={{display:"flex",gap:6,background:"var(--bg)",borderRadius:8,padding:4}}>
@@ -813,15 +783,12 @@ export default function Transactions() {
             })}
           </div>
 
-          {/* Mobile Cards */}
+          {/* ── Mobile Cards ── */}
           <div className="mobile-only" style={{flexDirection:"column",gap:10}}>
-            {/* Active filter summary pills */}
             {(category||(dateFrom&&activePreset!=="All"&&activePreset!==null))&&(
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
                 {category&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--amber-bg)",color:"var(--amber)",border:"1px solid var(--amber-border)"}}>{category}</span>}
-                {dateFrom&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--purple-bg)",color:"var(--purple)",border:"1px solid var(--purple-border)"}}>
-                  {activePreset||`${dateFrom} → ${dateTo}`}
-                </span>}
+                {dateFrom&&<span style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--purple-bg)",color:"var(--purple)",border:"1px solid var(--purple-border)"}}>{activePreset||`${dateFrom} → ${dateTo}`}</span>}
                 <button onClick={clearFilters} style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--red-bg)",color:"var(--red)",border:"1px solid var(--red-border)",cursor:"pointer",fontFamily:"inherit"}}>Clear ✕</button>
               </div>
             )}
@@ -834,7 +801,11 @@ export default function Transactions() {
                 {hasFilters&&<button onClick={clearFilters} style={{marginTop:12,padding:"8px 18px",borderRadius:8,background:"var(--accent)",border:"none",color:"#fff",fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Clear filters</button>}
               </div>
             ):filtered.map((t,i)=>(
-              <MobileTxCard key={`${t._type}-${t.id}-${i}`} t={t} onClick={()=>setSelected(selected?.id===t.id&&selected?._type===t._type?null:t)}/>
+              <MobileTxCard
+                key={`${t._type}-${t.id}-${i}`}
+                t={t}
+                onClick={()=>setSelected(selected?.id===t.id&&selected?._type===t._type?null:t)}
+              />
             ))}
           </div>
 
@@ -847,7 +818,7 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* <BottomNav/> */}
+      {/* <BottomNavBar/> */}
     </div>
   );
 }
