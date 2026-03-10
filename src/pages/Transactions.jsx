@@ -255,18 +255,50 @@ function txDate(t) {
   return raw?raw.slice(0,10):null;
 }
 
+// Resolve the correct display category for any transaction
+// Credits: use actual stored category (Income/Transfer/Refund/Cashback/Salary)
+// Debits:  use stored category, fallback to "Other"
+function resolveCategory(t) {
+  if (t._type === "credit") {
+    // category field may store "Income","Transfer","Refund","Cashback","Salary"
+    const stored = t.category || t.category_guess || "";
+    if (stored && stored !== "") return stored;
+    // legacy fallback: check source field used by income API
+    const src = t.source || t.credit_source || "";
+    if (src === "Salary")   return "Salary";
+    if (src === "Refund")   return "Refund";
+    if (src === "Cashback") return "Cashback";
+    if (src === "Transfer") return "Transfer";
+    return "Income";
+  }
+  return t.category || t.category_guess || "Other";
+}
+
+// Color scheme: green=income, blue=transfer, amber=refund/cashback, red=expense
+function getCategoryColors(category, isCredit) {
+  if (!isCredit) return {
+    accentColor:"var(--red)", accentBg:"var(--red-bg)", accentBorder:"var(--red-border)"
+  };
+  switch(category) {
+    case "Transfer":  return {accentColor:"var(--blue)",  accentBg:"var(--blue-bg)",  accentBorder:"var(--blue-border)"};
+    case "Refund":    return {accentColor:"var(--amber)", accentBg:"var(--amber-bg)", accentBorder:"var(--amber-border)"};
+    case "Cashback":  return {accentColor:"var(--amber)", accentBg:"var(--amber-bg)", accentBorder:"var(--amber-border)"};
+    default:          return {accentColor:"var(--green)", accentBg:"var(--green-bg)", accentBorder:"var(--green-border)"};
+  }
+}
+
 function getTxDisplay(t) {
   const isCredit = t._type==="credit";
   const auto     = isAutoTx(t);
-  const category = isCredit?"Income":(t.category||t.category_guess||"Other");
+  const category = resolveCategory(t);
   const merchant = isCredit
     ?(t.source||t.merchant||t.merchant_name||t.description||null)
     :(t.merchant||t.merchant_name||t.description||null);
   const dateStr  = fmtDateTime(t.created_at||t.date);
-  const accentColor = isCredit?"var(--green)":"var(--red)";
-  const accentBg    = isCredit?"var(--green-bg)":"var(--red-bg)";
-  const accentBorder= isCredit?"var(--green-border)":"var(--red-border)";
-  const borderColor = isCredit?"var(--green)":auto?"var(--blue)":"transparent";
+  const {accentColor,accentBg,accentBorder} = getCategoryColors(category, isCredit);
+  const borderColor = isCredit
+    ?(category==="Transfer"?"var(--blue)":"var(--green)")
+    :auto?"var(--blue)":"transparent";
   return {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor};
 }
 
@@ -303,7 +335,7 @@ function DetailDrawer({ txn, onClose }) {
           <div style={{fontSize:12,color:"var(--ink3)",marginBottom:10}}>{category}{merchant?" · "+merchant:""}</div>
           <div style={{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
             <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`}}>
-              {isCredit?"💰 Income":"💸 Expense"}
+              {isCredit?(category==="Transfer"?"🔁 Transfer":category==="Refund"?"↩️ Refund":category==="Cashback"?"🎁 Cashback":category==="Salary"?"💼 Salary":"💰 Income"):"💸 Expense"}
             </span>
             <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,
               background:auto?"var(--blue-bg)":"var(--amber-bg)",color:auto?"var(--blue)":"var(--amber)",
@@ -333,7 +365,7 @@ function DetailDrawer({ txn, onClose }) {
 
 /* ─── Mobile Filter Sheet ────────────────────────────────────────────────── */
 function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, setDateTo, onClose, onClear }) {
-  const CATEGORIES = ["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Income","Salary","Other"];
+  const CATEGORIES = ["Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Salary","Refund","Cashback","Other"];
   return (
     <>
       <div className="sheet-overlay" onClick={onClose}/>
@@ -427,7 +459,7 @@ function MobileTxCard({ t, onClick }) {
           {/* Badges */}
           <div style={{display:"flex",gap:4,flexShrink:0}}>
             <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:9,padding:"1px 6px"}}>
-              {isCredit?"💰 Income":"💸 Expense"}
+              {isCredit?(category==="Transfer"?"🔁 Transfer":category==="Refund"?"↩️ Refund":category==="Cashback"?"🎁 Cashback":category==="Salary"?"💼 Salary":"💰 Income"):"💸 Expense"}
             </span>
             <span className="badge" style={{background:auto?"var(--blue-bg)":"var(--amber-bg)",color:auto?"var(--blue)":"var(--amber)",border:`1px solid ${auto?"var(--blue-border)":"var(--amber-border)"}`,fontSize:9,padding:"1px 6px"}}>
               {auto?"🤖 Auto":"✍️ Manual"}
@@ -475,7 +507,7 @@ export default function Transactions() {
   const [showFilter,   setShowFilter]   = useState(false);
   const [isMobile,     setIsMobile]     = useState(window.innerWidth<=768);
 
-  const CATEGORIES = ["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Income","Salary","Other"];
+  const CATEGORIES = ["Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Salary","Refund","Cashback","Other"];
   const API = "https://smartspend-backend-aupt.onrender.com";
 
   useEffect(()=>{
@@ -523,11 +555,18 @@ export default function Transactions() {
     if (typeFilter==="credit") list=list.filter(t=>t._type==="credit");
     if (search){
       const q=search.toLowerCase();
-      list=list.filter(t=>t.category?.toLowerCase().includes(q)||t.merchant?.toLowerCase().includes(q)||t.source?.toLowerCase().includes(q));
+      list=list.filter(t=>{
+        const cat = resolveCategory(t).toLowerCase();
+        return cat.includes(q)
+          || (t.merchant||"").toLowerCase().includes(q)
+          || (t.source||"").toLowerCase().includes(q)
+          || (t.description||"").toLowerCase().includes(q)
+          || (t.credit_source||"").toLowerCase().includes(q);
+      });
     }
     if (category) list=list.filter(t=>{
-      if (t._type==="credit") return category==="Income"||category===(t.category||t.source||"Income");
-      return (t.category||"Other")===category;
+      const cat = resolveCategory(t);
+      return cat === category;
     });
     if (dateFrom) list=list.filter(t=>{const d=txDate(t);return d&&d>=dateFrom;});
     if (dateTo)   list=list.filter(t=>{const d=txDate(t);return d&&d<=dateTo;});
@@ -770,7 +809,7 @@ export default function Transactions() {
                   <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{category}</div>
                   <div style={{fontSize:13,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
                   <div style={{fontSize:14,fontWeight:700,color:accentColor}}>{isCredit?"+":"−"}₹{fmt(t.amount)}</div>
-                  <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:10,whiteSpace:"nowrap"}}>{isCredit?"💰 Income":"💸 Expense"}</span>
+                  <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:10,whiteSpace:"nowrap"}}>{isCredit?(category==="Transfer"?"🔁 Transfer":category==="Refund"?"↩️ Refund":category==="Cashback"?"🎁 Cashback":category==="Salary"?"💼 Salary":"💰 Income"):"💸 Expense"}</span>
                   <div>
                     <div style={{fontSize:12,fontWeight:500,color:"var(--ink2)"}}>{dateStr.split(",")[0]}</div>
                     <div style={{fontSize:11,color:"var(--ink4)",marginTop:1}}>{dateStr.split(",").slice(1).join(",").trim()}</div>

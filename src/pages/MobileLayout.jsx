@@ -315,10 +315,17 @@ export const fmt  = n => new Intl.NumberFormat("en-IN", { maximumFractionDigits:
 export const fmtK = n => n >= 100000 ? `${(n/100000).toFixed(1)}L` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : fmt(n);
 
 export const CAT_EMOJI = {
-  Food:"🍜", Transport:"🚗", Shopping:"🛍️", Entertainment:"🎬",
-  Health:"💊", Utilities:"⚡", Groceries:"🛒", Coffee:"☕",
-  Books:"📚", Bills:"📃", Travel:"✈️", Medicine:"💊",
-  Rent:"🏠", Other:"💳",
+  // Expenses
+  Food:"🍜", Groceries:"🛒", Transport:"🚗", Travel:"✈️",
+  Shopping:"🛍️", Entertainment:"🎬", Bills:"💡", Medicine:"💊",
+  Education:"📚", Finance:"💳", Coffee:"☕", Books:"📖",
+  Rent:"🏠", Health:"💊", Utilities:"⚡", Other:"💳",
+  // Credits
+  Income:"💰", Salary:"💼", Refund:"↩️", Cashback:"🎁",
+  // Transfers
+  Transfer:"🔁",
+  // Unknown
+  Unknown:"❓",
 };
 
 export const Icon = ({ d, size = 18, color = "currentColor", strokeWidth = 2 }) => (

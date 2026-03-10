@@ -141,10 +141,18 @@ function SummaryBar({pending}) {
 function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
   const isCredit = txn.transaction_type==="credit";
   const busy     = accepting||ignoring;
-  const col      = isCredit?"var(--green)":"var(--red)";
-  const bg       = isCredit?"var(--gbg)":"var(--rbg)";
-  const bdr      = isCredit?"var(--gborder)":"var(--rborder)";
-  const emoji    = isCredit?(CREDIT_SOURCE_EMOJI[txn.credit_source]||"💰"):(CAT_EMOJI[txn.category_guess]||"💸");
+  const isTransfer = isCredit && (txn.category_guess==="Transfer");
+  const isRefund   = isCredit && (txn.category_guess==="Refund" || txn.credit_source==="Refund");
+  const isCashback = isCredit && (txn.category_guess==="Cashback" || txn.credit_source==="Cashback");
+  const col = !isCredit?"var(--red)":isTransfer?"var(--blue)":isRefund||isCashback?"var(--amber)":"var(--green)";
+  const bg  = !isCredit?"var(--rbg)":isTransfer?"var(--bbg)":isRefund||isCashback?"var(--abg)":"var(--gbg)";
+  const bdr = !isCredit?"var(--rborder)":isTransfer?"var(--bborder)":isRefund||isCashback?"var(--aborder)":"var(--gborder)";
+  // For credits: if category_guess is Transfer/Refund/Cashback, use that emoji; else use credit_source emoji
+  const resolvedCreditCat = txn.category_guess && ["Transfer","Refund","Cashback","Salary","Income"].includes(txn.category_guess)
+    ? txn.category_guess : null;
+  const emoji = isCredit
+    ? (CAT_EMOJI[resolvedCreditCat] || CREDIT_SOURCE_EMOJI[txn.credit_source] || "💰")
+    : (CAT_EMOJI[txn.category_guess] || "💸");
 
   return (
     <div className="fade txn-card" style={{
@@ -183,7 +191,13 @@ function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
               {isCredit?txn.merchant||"Unknown":(txn.merchant||"Unknown")}
             </span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>·</span>
-            <span style={{fontSize:10,color:"var(--ink4)"}}>{isCredit?"Income":txn.category_guess||"Other"}</span>
+            <span style={{fontSize:10,color:"var(--ink4)"}}>
+              {isCredit
+                ?(txn.category_guess&&txn.category_guess!=="Income"
+                  ?txn.category_guess
+                  :(txn.credit_source||"Income"))
+                :(txn.category_guess||"Other")}
+            </span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>·</span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>{fmtDate(txn.transaction_date)}</span>
           </div>
@@ -230,10 +244,17 @@ function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
 function TxnRow({txn,onAccept,onIgnore,accepting,ignoring}) {
   const isCredit = txn.transaction_type==="credit";
   const busy     = accepting||ignoring;
-  const col      = isCredit?"var(--green)":"var(--red)";
-  const bg       = isCredit?"var(--gbg)":"var(--rbg)";
-  const bdr      = isCredit?"var(--gborder)":"var(--rborder)";
-  const emoji    = isCredit?(CREDIT_SOURCE_EMOJI[txn.credit_source]||"💰"):(CAT_EMOJI[txn.category_guess]||"💸");
+  const isTransferR = isCredit && (txn.category_guess==="Transfer");
+  const isRefundR   = isCredit && (txn.category_guess==="Refund"   || txn.credit_source==="Refund");
+  const isCashbackR = isCredit && (txn.category_guess==="Cashback" || txn.credit_source==="Cashback");
+  const col = !isCredit?"var(--red)":isTransferR?"var(--blue)":isRefundR||isCashbackR?"var(--amber)":"var(--green)";
+  const bg  = !isCredit?"var(--rbg)":isTransferR?"var(--bbg)":isRefundR||isCashbackR?"var(--abg)":"var(--gbg)";
+  const bdr = !isCredit?"var(--rborder)":isTransferR?"var(--bborder)":isRefundR||isCashbackR?"var(--aborder)":"var(--gborder)";
+  const resolvedCreditCatR = txn.category_guess && ["Transfer","Refund","Cashback","Salary","Income"].includes(txn.category_guess)
+    ? txn.category_guess : null;
+  const emoji = isCredit
+    ? (CAT_EMOJI[resolvedCreditCatR] || CREDIT_SOURCE_EMOJI[txn.credit_source] || "💰")
+    : (CAT_EMOJI[txn.category_guess] || "💸");
 
   return (
     <div className="fade" style={{display:"flex",alignItems:"center",gap:14,background:"var(--surface)",borderRadius:10,padding:"14px 18px",border:`1px solid var(--border)`,borderLeft:`4px solid ${col}`,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
@@ -246,7 +267,13 @@ function TxnRow({txn,onAccept,onIgnore,accepting,ignoring}) {
         </div>
         <div style={{fontSize:13,color:"var(--ink2)",fontWeight:500}}>{isCredit?`From: ${txn.merchant||"Unknown"}`:(txn.merchant||"Unknown merchant")}</div>
         <div style={{display:"flex",gap:12,marginTop:3}}>
-          <span style={{fontSize:11,color:"var(--ink4)"}}>{isCredit?"Income":txn.category_guess||"Other"}</span>
+          <span style={{fontSize:11,color:"var(--ink4)"}}>
+            {isCredit
+              ?(txn.category_guess&&txn.category_guess!=="Income"
+                ?txn.category_guess
+                :(txn.credit_source||"Income"))
+              :(txn.category_guess||"Other")}
+          </span>
           <span style={{fontSize:11,color:"var(--ink4)"}}>{fmtDate(txn.transaction_date)}</span>
         </div>
       </div>
@@ -293,7 +320,7 @@ function FilterBar({filters,onChange,counts}) {
     {value:"week", label:"This week"},
     {value:"month",label:"This month"},
   ];
-  const catOpts=["All","Food","Travel","Shopping","Entertainment","Bills","Groceries","Medicine","Other"];
+  const catOpts=["All","Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Refund","Cashback","Salary","Other"];
 
   return (
     <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
@@ -394,7 +421,13 @@ export default function DetectedTransactions() {
     if(filters.amount==="small")  r=r.filter(t=>t.amount<500);
     if(filters.amount==="medium") r=r.filter(t=>t.amount>=500&&t.amount<=2000);
     if(filters.amount==="large")  r=r.filter(t=>t.amount>2000);
-    if(filters.category!=="All") r=r.filter(t=>t.transaction_type==="credit"?filters.category==="Income":(t.category_guess||"Other")===filters.category);
+    if(filters.category!=="All") r=r.filter(t=>{
+      if(t.transaction_type==="credit"){
+        const cat = t.category_guess || t.credit_source || "Income";
+        return cat === filters.category;
+      }
+      return (t.category_guess||"Other") === filters.category;
+    });
     const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
     const week=new Date(today);week.setDate(today.getDate()-7);
     const month=new Date(today.getFullYear(),today.getMonth(),1);
