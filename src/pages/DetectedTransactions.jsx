@@ -384,64 +384,6 @@ function FilterBar({filters,onChange,counts}) {
   );
 }
 
-/* ─── Re-scan Banner ──────────────────────────────────────────────────────── */
-function RescanBanner({unknownCount, onRescan, rescanState}) {
-  const {running, pct, fixed, newCount, statusMsg, done} = rescanState;
-  if (unknownCount===0 && !running && !done) return null;
-
-  return (
-    <div className="fade" style={{
-      marginBottom:10, padding:"12px 14px", borderRadius:10,
-      background:done?"var(--gbg)":running?"var(--bbg)":"var(--abg)",
-      border:`1px solid ${done?"var(--gborder)":running?"var(--bborder)":"var(--aborder)"}`,
-    }}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-        <div style={{flex:1,minWidth:0}}>
-          {!running && !done && (
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:"var(--amber)",marginBottom:2}}>
-                ⚠️ {unknownCount} transaction{unknownCount!==1?"s":""} have UNKNOWN merchant
-              </div>
-              <div style={{fontSize:11,color:"var(--ink3)"}}>
-                These were saved by old code. Tap Re-parse to fix them automatically using the new parser.
-              </div>
-            </div>
-          )}
-          {running && (
-            <div>
-              <div style={{fontSize:13,fontWeight:700,color:"var(--blue)",marginBottom:4}}>
-                🔄 Re-parsing SMS history…
-              </div>
-              <div style={{fontSize:11,color:"var(--ink3)",marginBottom:6}}>{statusMsg||"Working…"}</div>
-              <div style={{height:6,borderRadius:99,background:"rgba(37,99,235,.12)",overflow:"hidden"}}>
-                <div style={{height:"100%",borderRadius:99,background:"var(--blue)",width:`${pct}%`,transition:"width .4s ease"}}/>
-              </div>
-            </div>
-          )}
-          {done && (
-            <div style={{fontSize:13,fontWeight:700,color:"var(--green)"}}>
-              ✅ Done! Fixed <strong>{fixed}</strong> UNKNOWN records{newCount>0?`, added ${newCount} new`:""}. Pull to refresh.
-            </div>
-          )}
-        </div>
-        {!running && !done && (
-          <button onClick={onRescan} style={{
-            flexShrink:0,padding:"8px 14px",borderRadius:8,background:"var(--amber)",
-            border:"none",color:"#fff",fontSize:12,fontWeight:700,
-            cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"
-          }}>🔧 Re-parse All</button>
-        )}
-        {running && (
-          <div style={{flexShrink:0,fontSize:20,fontWeight:800,color:"var(--blue)",
-            fontFamily:"'Sora',sans-serif",minWidth:40,textAlign:"right"}}>
-            {pct}%
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ─── Main ────────────────────────────────────────────────────────────────── */
 export default function DetectedTransactions() {
   injectCSS();
@@ -455,7 +397,6 @@ export default function DetectedTransactions() {
   const [toast,      setToast]     =useState(null);
   const [showFilter, setShowFilter]=useState(false);
   const [filters,    setFilters]   =useState({type:"all",amount:"all",category:"All",date:"all"});
-  const [rescanState,setRescanState]=useState({running:false,pct:0,fixed:0,newCount:0,statusMsg:"",done:false});
 
   const API="https://smartspend-backend-aupt.onrender.com";
 
@@ -536,64 +477,6 @@ export default function DetectedTransactions() {
 
   function logout(){localStorage.removeItem("token");navigate("/");}
 
-  // Count how many pending records have UNKNOWN merchant or Other category
-  const unknownCount = useMemo(()=>
-    pending.filter(t=>t.merchant==="UNKNOWN"||t.merchant===""||!t.merchant||t.category_guess==="Other"||!t.category_guess).length
-  ,[pending]);
-
-  // Re-parse: calls the backend endpoint which triggers FullRescanWorker on the device.
-  // Since Android runs the actual worker, we simulate progress on the frontend
-  // and poll for changes — the real fix happens on-device via WorkManager.
-  async function handleRescan() {
-    const token=localStorage.getItem("token");
-    if (!token) return;
-
-    setRescanState({running:true,pct:0,fixed:0,newCount:0,statusMsg:"Sending rescan request to device…",done:false});
-    showToast("🔄 Re-parse started — check your Android device notifications",true);
-
-    try {
-      // Tell the backend to mark all UNKNOWN records for reprocessing
-      // The Android app's next WorkManager run will pick these up via the rescan endpoint
-      await fetch(`${API}/api/detected/rescan`,{
-        method:"POST",
-        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"}
-      });
-    } catch(_) {}
-
-    // Simulate progress while we wait for the Android worker to fix records
-    // We poll the pending list every 3 seconds and compare UNKNOWN counts
-    let polls = 0;
-    const maxPolls = 40; // 2 min max
-    let lastUnknown = unknownCount;
-    let totalFixed = 0;
-
-    const pollInterval = setInterval(async ()=>{
-      polls++;
-      const pct = Math.min(95, Math.round((polls/maxPolls)*95));
-
-      // Reload data
-      try {
-        const r=await fetch(`${API}/api/detected/pending`,{headers:{Authorization:`Bearer ${token}`}});
-        if(r.ok){
-          const data=await r.json();
-          const nowUnknown=data.filter(t=>t.merchant==="UNKNOWN"||t.merchant===""||!t.merchant).length;
-          const fixed=Math.max(0,lastUnknown-nowUnknown);
-          totalFixed+=fixed;
-          lastUnknown=nowUnknown;
-          setPending(data);
-          setRescanState(s=>({...s,pct,fixed:totalFixed,
-            statusMsg:`Scanning… ${nowUnknown} UNKNOWN remaining · ${totalFixed} fixed so far`}));
-        }
-      } catch(_){}
-
-      if(polls>=maxPolls){
-        clearInterval(pollInterval);
-        setRescanState(s=>({...s,running:false,pct:100,done:true,
-          statusMsg:"Complete",fixed:totalFixed}));
-      }
-    },3000);
-  }
-
   if(loading) return <LoadingScreen text="Checking your SMS…"/>;
 
   /* ── Mobile header right slot ── */
@@ -667,12 +550,6 @@ export default function DetectedTransactions() {
               ⚠️ {error}
             </div>
           )}
-
-          <RescanBanner
-            unknownCount={unknownCount}
-            onRescan={handleRescan}
-            rescanState={rescanState}
-          />
 
           {pending.length>0&&<SummaryBar pending={pending}/>}
 
