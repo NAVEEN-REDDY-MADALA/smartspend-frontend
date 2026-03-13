@@ -94,24 +94,12 @@ const CSS = `
   .sheet-handle { width:38px; height:4px; background:var(--border); border-radius:99px; margin:10px auto 0; }
 
   /* Mobile quick filter bar */
-  .mobile-quick-filters {
-    background:var(--sidebar-bg);
-    padding:0 14px 12px;
-    display:none;
-  }
-  @media (max-width:768px) {
-    .mobile-quick-filters { display:block !important; }
-  }
+  .mobile-quick-filters { background:var(--sidebar-bg); padding:0 14px 12px; display:none; }
+  @media (max-width:768px) { .mobile-quick-filters { display:block !important; } }
 
   /* Mobile search bar */
-  .mobile-search-bar {
-    background:var(--sidebar-bg);
-    padding:0 14px 10px;
-    display:none;
-  }
-  @media (max-width:768px) {
-    .mobile-search-bar { display:block !important; }
-  }
+  .mobile-search-bar { background:var(--sidebar-bg); padding:0 14px 10px; display:none; }
+  @media (max-width:768px) { .mobile-search-bar { display:block !important; } }
 
   /* Horizontal scroll chips */
   .chips-scroll {
@@ -129,8 +117,8 @@ const CSS = `
 `;
 
 function injectCSS() {
-  if (typeof document==="undefined"||document.getElementById("__tx_v6__")) return;
-  const s=document.createElement("style"); s.id="__tx_v6__"; s.textContent=CSS;
+  if (typeof document==="undefined"||document.getElementById("__tx_v7__")) return;
+  const s=document.createElement("style"); s.id="__tx_v7__"; s.textContent=CSS;
   document.head.appendChild(s);
 }
 
@@ -140,8 +128,9 @@ const isAutoTx = t => t.is_auto===true||t.is_auto===1||t.is_auto==="true"||t.is_
 const CAT_EMOJI = {
   Food:"🍜", Transport:"🚗", Shopping:"🛍️", Entertainment:"🎬",
   Health:"💊", Utilities:"⚡", Groceries:"🛒", Coffee:"☕",
-  Books:"📚", Bills:"📃", Travel:"✈️", Medicine:"💊",
-  Income:"💰", Salary:"💼", Refund:"↩️", Cashback:"🎁", Other:"💳",
+  Books:"📚", Bills:"💡", Travel:"✈️", Medicine:"💊",
+  Income:"💰", Salary:"💼", Refund:"↩️", Cashback:"🎁",
+  Transfer:"🔁", Finance:"💳", Education:"📚", Other:"💳",
 };
 
 const Icon = ({d,size=14,color="currentColor"}) => (
@@ -225,21 +214,6 @@ function Sidebar({ onLogout }) {
   );
 }
 
-function BottomNavBar() {
-  const location = useLocation();
-  const path = location.pathname;
-  return (
-    <nav className="bottom-nav">
-      {BOTTOM_NAV.map(item=>(
-        <Link key={item.to} to={item.to} className={`bnav-item${path===item.to?" active":""}`}>
-          <Icon d={ICONS[item.icon]} size={20}/>
-          {item.label}
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
 function fmtDateTime(raw) {
   if (!raw) return "—";
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
@@ -255,63 +229,125 @@ function txDate(t) {
   return raw?raw.slice(0,10):null;
 }
 
-// Resolve the correct display category for any transaction
-// Credits: use actual stored category (Income/Transfer/Refund/Cashback/Salary)
-// Debits:  use stored category, fallback to "Other"
+// ── TYPE DETECTION ────────────────────────────────────────────────────────────
+// Detects true transaction type even when backend stores debits in /income table
+function looksLikeDebitMerchant(t) {
+  const merch = (t.merchant||t.merchant_name||t.source||t.description||"").toUpperCase().trim();
+  // "MUNNI S", "RAHUL K" — FirstName + single uppercase letter = P2P debit
+  if (/^[A-Z][A-Z ]+\s[A-Z]$/.test(merch)) return true;
+  // Explicit outgoing-transfer keywords
+  const debitKeywords = ["UPITRANSFER","UPI TRANSFER","NEFT TRANSFER","IMPS TRANSFER",
+                         "SENT TO","PAID TO","TRF TO","MONEY SENT","TRANSFER SENT"];
+  if (debitKeywords.some(k => merch.includes(k))) return true;
+  return false;
+}
+
+function detectType(t, apiDefault) {
+  // 1. Explicit transaction_type field (most reliable)
+  const tt = (t.transaction_type||t.type||"").toLowerCase();
+  if (tt === "debit"  || tt === "expense") return "debit";
+  if (tt === "credit" || tt === "income")  return "credit";
+  // 2. Negative amount = always debit (backend sometimes sends -199)
+  if (typeof t.amount === "number" && t.amount < 0) return "debit";
+  // 3. Merchant name heuristics for income-table debits
+  if (apiDefault === "credit" && looksLikeDebitMerchant(t)) return "debit";
+  return apiDefault;
+}
+
+// ── CATEGORY RESOLUTION ───────────────────────────────────────────────────────
+// Multi-level resolution: stored field → source field → merchant hints → description → default
 function resolveCategory(t) {
-  if (t._type === "credit") {
-    // category field may store "Income","Transfer","Refund","Cashback","Salary"
+  const isCredit = t._type === "credit";
+
+  if (isCredit) {
+    // 1. Explicit stored category
     const stored = t.category || t.category_guess || "";
-    if (stored && stored !== "") return stored;
-    // legacy fallback: check source field used by income API
-    const src = t.source || t.credit_source || "";
-    if (src === "Salary")   return "Salary";
-    if (src === "Refund")   return "Refund";
-    if (src === "Cashback") return "Cashback";
-    if (src === "Transfer") return "Transfer";
+    const validCreditCats = ["Income","Transfer","Refund","Cashback","Salary"];
+    if (stored && validCreditCats.includes(stored)) return stored;
+
+    // 2. credit_source / source from Android parser
+    const src = t.credit_source || t.source || "";
+    if (src === "Salary")       return "Salary";
+    if (src === "Refund")       return "Refund";
+    if (src === "Cashback")     return "Cashback";
+    if (src === "UPI Received") return "Transfer";
+    if (src === "Transfer")     return "Transfer";
+
+    // 3. Merchant name hints
+    const merch = (t.merchant||t.merchant_name||t.source||"").toUpperCase();
+    if (merch.includes("TRANSFER")||merch.includes("NEFT")||merch.includes("IMPS")||merch.includes("RTGS")) return "Transfer";
+    if (merch === "SALARY")   return "Salary";
+    if (merch === "REFUND")   return "Refund";
+    if (merch === "CASHBACK") return "Cashback";
+
+    // 4. Description hints
+    const desc = (t.description||"").toLowerCase();
+    if (desc.includes("salary")||desc.includes("stipend")) return "Salary";
+    if (desc.includes("refund")||desc.includes("reversal")) return "Refund";
+    if (desc.includes("cashback")) return "Cashback";
+    if (desc.includes("transfer")) return "Transfer";
+
     return "Income";
   }
-  return t.category || t.category_guess || "Other";
+
+  // Debit category
+  const cat = t.category || t.category_guess || "";
+  if (cat) return cat;
+  const merch = (t.merchant||t.merchant_name||"").toUpperCase();
+  if (merch.includes("TRANSFER")||merch.includes("NEFT")||merch.includes("IMPS")||merch.includes("RTGS")) return "Transfer";
+  return "Other";
 }
 
-// Color scheme: green=income, blue=transfer, amber=refund/cashback, red=expense
+// ── COLOR SCHEME ──────────────────────────────────────────────────────────────
+// Transfer = blue (regardless of debit/credit), Income = green, Expense = red, Refund/Cashback = amber
 function getCategoryColors(category, isCredit) {
-  if (!isCredit) return {
-    accentColor:"var(--red)", accentBg:"var(--red-bg)", accentBorder:"var(--red-border)"
-  };
+  if (category === "Transfer") return {accentColor:"var(--blue)", accentBg:"var(--blue-bg)", accentBorder:"var(--blue-border)"};
+  if (!isCredit) return {accentColor:"var(--red)", accentBg:"var(--red-bg)", accentBorder:"var(--red-border)"};
   switch(category) {
-    case "Transfer":  return {accentColor:"var(--blue)",  accentBg:"var(--blue-bg)",  accentBorder:"var(--blue-border)"};
-    case "Refund":    return {accentColor:"var(--amber)", accentBg:"var(--amber-bg)", accentBorder:"var(--amber-border)"};
-    case "Cashback":  return {accentColor:"var(--amber)", accentBg:"var(--amber-bg)", accentBorder:"var(--amber-border)"};
-    default:          return {accentColor:"var(--green)", accentBg:"var(--green-bg)", accentBorder:"var(--green-border)"};
+    case "Refund":   return {accentColor:"var(--amber)",accentBg:"var(--amber-bg)",accentBorder:"var(--amber-border)"};
+    case "Cashback": return {accentColor:"var(--amber)",accentBg:"var(--amber-bg)",accentBorder:"var(--amber-border)"};
+    default:         return {accentColor:"var(--green)",accentBg:"var(--green-bg)",accentBorder:"var(--green-border)"};
   }
 }
 
+// ── TYPE BADGE LABEL ──────────────────────────────────────────────────────────
+function typeBadgeLabel(isCredit, category) {
+  if (category === "Transfer") return "🔁 Transfer";
+  if (!isCredit)               return "💸 Expense";
+  if (category === "Refund")   return "↩️ Refund";
+  if (category === "Cashback") return "🎁 Cashback";
+  if (category === "Salary")   return "💼 Salary";
+  return "💰 Income";
+}
+
+// ── GET TX DISPLAY ────────────────────────────────────────────────────────────
 function getTxDisplay(t) {
-  const isCredit = t._type==="credit";
-  const auto     = isAutoTx(t);
-  const category = resolveCategory(t);
-  const merchant = isCredit
-    ?(t.source||t.merchant||t.merchant_name||t.description||null)
-    :(t.merchant||t.merchant_name||t.description||null);
-  const dateStr  = fmtDateTime(t.created_at||t.date);
+  const isCredit  = t._type === "credit";
+  const auto      = isAutoTx(t);
+  const category  = resolveCategory(t);
+  const merchant  = isCredit
+    ? (t.source||t.merchant||t.merchant_name||t.description||null)
+    : (t.merchant||t.merchant_name||t.description||null);
+  const absAmount = Math.abs(t.amount);
+  const dateStr   = fmtDateTime(t.created_at||t.date);
   const {accentColor,accentBg,accentBorder} = getCategoryColors(category, isCredit);
-  const borderColor = isCredit
-    ?(category==="Transfer"?"var(--blue)":"var(--green)")
-    :auto?"var(--blue)":"transparent";
-  return {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor};
+  const borderColor = category === "Transfer" ? "var(--blue)"
+    : isCredit ? "var(--green)"
+    : auto     ? "var(--blue)"
+    : "transparent";
+  return {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor,absAmount};
 }
 
 /* ─── Detail Drawer ──────────────────────────────────────────────────────── */
 function DetailDrawer({ txn, onClose }) {
   if (!txn) return null;
-  const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder} = getTxDisplay(txn);
+  const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,absAmount} = getTxDisplay(txn);
 
   const rows = [
-    {emoji:"🏷️",label:"Type",           value:isCredit?"💰 Income / Credit":"💸 Expense / Debit"},
+    {emoji:"🏷️",label:"Type",           value:typeBadgeLabel(isCredit,category)},
     {emoji:"📂",label:"Category",        value:category},
     {emoji:"🏪",label:"Merchant / From", value:merchant||"—"},
-    {emoji:"💵",label:"Amount",          value:(isCredit?"+":"−")+" ₹"+fmt(txn.amount)},
+    {emoji:"💵",label:"Amount",          value:(isCredit?"+":"−")+" ₹"+fmt(absAmount)},
     {emoji:"📅",label:"Date & Time",     value:dateStr},
     {emoji:"📲",label:"Source",          value:auto?"Auto-detected from SMS":"Added manually"},
     {emoji:"🔢",label:"Transaction ID",  value:"#"+txn.id},
@@ -330,12 +366,12 @@ function DetailDrawer({ txn, onClose }) {
         <div style={{margin:"18px 22px 0",padding:"22px",borderRadius:14,textAlign:"center",background:accentBg,border:`1px solid ${accentBorder}`}}>
           <div style={{fontSize:36,marginBottom:8}}>{CAT_EMOJI[category]||(isCredit?"💰":"💳")}</div>
           <div style={{fontSize:30,fontWeight:800,color:accentColor,marginBottom:4,fontFamily:"'Sora',sans-serif"}}>
-            {isCredit?"+":"−"}₹{fmt(txn.amount)}
+            {isCredit?"+":"−"}₹{fmt(absAmount)}
           </div>
           <div style={{fontSize:12,color:"var(--ink3)",marginBottom:10}}>{category}{merchant?" · "+merchant:""}</div>
           <div style={{display:"flex",justifyContent:"center",gap:8,flexWrap:"wrap"}}>
             <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`}}>
-              {isCredit?(category==="Transfer"?"🔁 Transfer":category==="Refund"?"↩️ Refund":category==="Cashback"?"🎁 Cashback":category==="Salary"?"💼 Salary":"💰 Income"):"💸 Expense"}
+              {typeBadgeLabel(isCredit,category)}
             </span>
             <span style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:99,fontSize:11,fontWeight:600,
               background:auto?"var(--blue-bg)":"var(--amber-bg)",color:auto?"var(--blue)":"var(--amber)",
@@ -411,11 +447,9 @@ function FilterSheet({ category, setCategory, dateFrom, setDateFrom, dateTo, set
   );
 }
 
-/* ─── Mobile Transaction Card — FIXED: now shows date AND time ────────────── */
+/* ─── Mobile Transaction Card ────────────────────────────────────────────── */
 function MobileTxCard({ t, onClick }) {
-  const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor} = getTxDisplay(t);
-
-  // Split "07 Mar 2026, 05:27 pm" → date part + time part
+  const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor,absAmount} = getTxDisplay(t);
   const dateParts = dateStr.split(",");
   const datePart  = dateParts[0]?.trim() || dateStr;
   const timePart  = dateParts.slice(1).join(",").trim();
@@ -423,43 +457,29 @@ function MobileTxCard({ t, onClick }) {
   return (
     <div className="tx-card" onClick={onClick}
       style={{background:"var(--surface)",borderRadius:12,padding:"13px 14px",border:"1px solid var(--border)",borderLeft:`4px solid ${borderColor}`,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-
-      {/* Icon */}
       <div style={{width:42,height:42,borderRadius:11,background:accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
         {CAT_EMOJI[category]||(isCredit?"💰":"💳")}
       </div>
-
-      {/* Content */}
       <div style={{flex:1,minWidth:0}}>
-        {/* Row 1: category + amount */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
           <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"52%"}}>
             {category}
           </div>
           <div style={{fontSize:15,fontWeight:800,color:accentColor,fontFamily:"'Sora',sans-serif",letterSpacing:"-0.3px",flexShrink:0}}>
-            {isCredit?"+":"−"}₹{fmt(t.amount)}
+            {isCredit?"+":"−"}₹{fmt(absAmount)}
           </div>
         </div>
-
-        {/* Row 2: merchant */}
         <div style={{fontSize:12,color:"var(--ink3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:5}}>
           {merchant||"—"}
         </div>
-
-        {/* Row 3: date+time on left, badges on right */}
         <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:6}}>
-          {/* ✅ FIX: show both date AND time */}
           <div style={{display:"flex",flexDirection:"column",gap:1}}>
             <span style={{fontSize:10,color:"var(--ink4)",fontWeight:500}}>{datePart}</span>
-            {timePart && (
-              <span style={{fontSize:10,color:"var(--ink4)"}}>{timePart}</span>
-            )}
+            {timePart&&<span style={{fontSize:10,color:"var(--ink4)"}}>{timePart}</span>}
           </div>
-
-          {/* Badges */}
           <div style={{display:"flex",gap:4,flexShrink:0}}>
             <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:9,padding:"1px 6px"}}>
-              {isCredit?(category==="Transfer"?"🔁 Transfer":category==="Refund"?"↩️ Refund":category==="Cashback"?"🎁 Cashback":category==="Salary"?"💼 Salary":"💰 Income"):"💸 Expense"}
+              {typeBadgeLabel(isCredit,category)}
             </span>
             <span className="badge" style={{background:auto?"var(--blue-bg)":"var(--amber-bg)",color:auto?"var(--blue)":"var(--amber)",border:`1px solid ${auto?"var(--blue-border)":"var(--amber-border)"}`,fontSize:9,padding:"1px 6px"}}>
               {auto?"🤖 Auto":"✍️ Manual"}
@@ -533,9 +553,13 @@ export default function Transactions() {
       const expenses=expRes.ok?await expRes.json():[];
       const incRes=await fetch(`${API}/api/income/`,{headers});
       const incomes=incRes.ok?await incRes.json():[];
+
+      // ── Smart type tagging ────────────────────────────────────────────────
+      // Don't blindly trust which API endpoint returned the record.
+      // Some debits end up in /income due to SMS parsing errors.
       const tagged=[
-        ...expenses.map(t=>({...t,_type:"debit"})),
-        ...incomes.map(t=>({...t,_type:"credit"})),
+        ...expenses.map(t=>({...t,_type:detectType(t,"debit")})),
+        ...incomes.map(t=>({...t,_type:detectType(t,"credit")})),
       ];
       tagged.sort((a,b)=>{
         const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+(a.created_at?.includes("Z")||a.created_at?.includes("+")?"":'Z'));
@@ -556,28 +580,21 @@ export default function Transactions() {
     if (search){
       const q=search.toLowerCase();
       list=list.filter(t=>{
-        const cat = resolveCategory(t).toLowerCase();
+        const cat=resolveCategory(t).toLowerCase();
         return cat.includes(q)
-          || (t.merchant||"").toLowerCase().includes(q)
-          || (t.source||"").toLowerCase().includes(q)
-          || (t.description||"").toLowerCase().includes(q)
-          || (t.credit_source||"").toLowerCase().includes(q);
+          ||(t.merchant||"").toLowerCase().includes(q)
+          ||(t.source||"").toLowerCase().includes(q)
+          ||(t.description||"").toLowerCase().includes(q)
+          ||(t.credit_source||"").toLowerCase().includes(q);
       });
     }
-    if (category) list=list.filter(t=>{
-      const cat = resolveCategory(t);
-      return cat === category;
-    });
+    if (category) list=list.filter(t=>resolveCategory(t)===category);
     if (dateFrom) list=list.filter(t=>{const d=txDate(t);return d&&d>=dateFrom;});
     if (dateTo)   list=list.filter(t=>{const d=txDate(t);return d&&d<=dateTo;});
     setFiltered(list);
   }
 
-  function applyPreset(p) {
-    setDateFrom(p.from());
-    setDateTo(p.to());
-    setActivePreset(p.label);
-  }
+  function applyPreset(p) { setDateFrom(p.from()); setDateTo(p.to()); setActivePreset(p.label); }
 
   function clearFilters() {
     setSearch(""); setTypeFilter("all"); setCategory("");
@@ -587,8 +604,9 @@ export default function Transactions() {
   function logout(){localStorage.removeItem("token");navigate("/",{replace:true});}
 
   const hasFilters      = search||typeFilter!=="all"||category||dateFrom||dateTo;
-  const totalDebit      = filtered.filter(t=>t._type==="debit") .reduce((s,t)=>s+t.amount,0);
-  const totalCredit     = filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+t.amount,0);
+  // Use Math.abs so negative amounts from backend don't corrupt totals
+  const totalDebit      = filtered.filter(t=>t._type==="debit") .reduce((s,t)=>s+Math.abs(t.amount),0);
+  const totalCredit     = filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);
   const debitCount      = filtered.filter(t=>t._type==="debit").length;
   const creditCount     = filtered.filter(t=>t._type==="credit").length;
   const activeFilterCount = [search,typeFilter!=="all",category,dateFrom,dateTo].filter(Boolean).length;
@@ -674,12 +692,8 @@ export default function Transactions() {
             <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",zIndex:1}}>
               <Icon d={ICONS.search} size={14} color="rgba(255,255,255,.5)"/>
             </span>
-            <input
-              placeholder="Search category or merchant…"
-              value={search}
-              onChange={e=>setSearch(e.target.value)}
-              style={{width:"100%",padding:"10px 12px 10px 36px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.12)",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}
-            />
+            <input placeholder="Search category or merchant…" value={search} onChange={e=>setSearch(e.target.value)}
+              style={{width:"100%",padding:"10px 12px 10px 36px",borderRadius:10,border:"1.5px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.12)",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
             {search&&(
               <button onClick={()=>setSearch("")}
                 style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}>
@@ -713,11 +727,11 @@ export default function Transactions() {
           {/* Summary cards */}
           <div className="summary-grid fade" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:20}}>
             {[
-              {label:"Total",          val:filtered.length,       sub:"transactions",                 col:"var(--ink)",   bg:"var(--surface)"},
-              {label:"Total income",   val:"₹"+fmt(totalCredit),  sub:creditCount+" entries",         col:"var(--green)", bg:"var(--green-bg)"},
-              {label:"Total expenses", val:"₹"+fmt(totalDebit),   sub:debitCount+" entries",          col:"var(--red)",   bg:"var(--red-bg)"},
+              {label:"Total",          val:filtered.length,        sub:"transactions",          col:"var(--ink)",   bg:"var(--surface)"},
+              {label:"Total income",   val:"₹"+fmt(totalCredit),   sub:creditCount+" entries",  col:"var(--green)", bg:"var(--green-bg)"},
+              {label:"Total expenses", val:"₹"+fmt(totalDebit),    sub:debitCount+" entries",   col:"var(--red)",   bg:"var(--red-bg)"},
               {label:"Net balance",
-               val:(totalCredit>=totalDebit?"+":"-")+"₹"+fmt(Math.abs(totalCredit-totalDebit)),
+               val:(totalCredit>=totalDebit?"+":"−")+"₹"+fmt(Math.abs(totalCredit-totalDebit)),
                sub:totalCredit>=totalDebit?"More in 🎉":"More out ⚠️",
                col:totalCredit>=totalDebit?"var(--green)":"var(--red)",
                bg:totalCredit>=totalDebit?"var(--green-bg)":"var(--red-bg)"},
@@ -798,7 +812,7 @@ export default function Transactions() {
                 {hasFilters&&<button onClick={clearFilters} style={{marginTop:12,padding:"7px 16px",borderRadius:7,background:"var(--accent)",border:"none",color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>Clear all filters</button>}
               </div>
             ):filtered.map((t,i)=>{
-              const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor}=getTxDisplay(t);
+              const {isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor,absAmount}=getTxDisplay(t);
               const isSelected=selected?.id===t.id&&selected?._type===t._type;
               return (
                 <div key={`${t._type}-${t.id}-${i}`}
@@ -808,8 +822,10 @@ export default function Transactions() {
                   <div style={{width:34,height:34,borderRadius:8,background:accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>{CAT_EMOJI[category]||(isCredit?"💰":"💳")}</div>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{category}</div>
                   <div style={{fontSize:13,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
-                  <div style={{fontSize:14,fontWeight:700,color:accentColor}}>{isCredit?"+":"−"}₹{fmt(t.amount)}</div>
-                  <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:10,whiteSpace:"nowrap"}}>{isCredit?(category==="Transfer"?"🔁 Transfer":category==="Refund"?"↩️ Refund":category==="Cashback"?"🎁 Cashback":category==="Salary"?"💼 Salary":"💰 Income"):"💸 Expense"}</span>
+                  <div style={{fontSize:14,fontWeight:700,color:accentColor}}>{isCredit?"+":"−"}₹{fmt(absAmount)}</div>
+                  <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:10,whiteSpace:"nowrap"}}>
+                    {typeBadgeLabel(isCredit,category)}
+                  </span>
                   <div>
                     <div style={{fontSize:12,fontWeight:500,color:"var(--ink2)"}}>{dateStr.split(",")[0]}</div>
                     <div style={{fontSize:11,color:"var(--ink4)",marginTop:1}}>{dateStr.split(",").slice(1).join(",").trim()}</div>
@@ -831,7 +847,6 @@ export default function Transactions() {
                 <button onClick={clearFilters} style={{padding:"4px 10px",borderRadius:99,fontSize:11,fontWeight:600,background:"var(--red-bg)",color:"var(--red)",border:"1px solid var(--red-border)",cursor:"pointer",fontFamily:"inherit"}}>Clear ✕</button>
               </div>
             )}
-
             {filtered.length===0?(
               <div style={{background:"var(--surface)",borderRadius:14,padding:"48px 20px",textAlign:"center",border:"1px solid var(--border)"}}>
                 <div style={{fontSize:32,marginBottom:8}}>🔍</div>
@@ -852,12 +867,11 @@ export default function Transactions() {
             <span className="pulse" style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"var(--green)"}}/>
             Auto-updates every 5 seconds ·
             <span style={{color:"var(--green)",fontWeight:600}}>Green = Income</span> ·
+            <span style={{color:"var(--blue)",fontWeight:600}}>Blue = Transfer</span> ·
             <span style={{color:"var(--red)",fontWeight:600}}>Red = Expense</span>
           </div>
         </div>
       </div>
-
-      {/* <BottomNavBar/> */}
     </div>
   );
 }
