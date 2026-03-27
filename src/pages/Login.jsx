@@ -52,7 +52,8 @@ function injectCSS() {
   document.head.appendChild(s);
 }
 
-const API = "https://smartspend-backend-aupt.onrender.com/api/auth";
+// const API = "https://smartspend-backend-aupt.onrender.com/api/auth";
+const API = "https://smartspend-backend-production-6f21.up.railway.app/api/auth";
 const lbl = { fontSize:12, fontWeight:600, color:"var(--ink2)", display:"block", marginBottom:5 };
 
 function primaryBtn(loading, disabled) {
@@ -110,44 +111,39 @@ function LoginForm({ onForgot }) {
   const [msg, setMsg]           = useState("");
   const [loading, setLoading]   = useState(false);
 
- async function handle(e) {
-  e.preventDefault();
-  if (loading) return;
-
-  setLoading(true);
-  setMsg("");
-
-  try {
-    const res = await fetch(`${API}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-
-    console.log("LOGIN RESPONSE:", data); // 🔥 DEBUG
-
-    if (!res.ok) {
-      setMsg(data.detail || "Wrong email or password.");
-      return;
-    }
-
-    // ✅ Save token
-    localStorage.setItem("token", data.access_token);
-
-    // ✅ Success message (optional)
-    setMsg("");
-
-    // ✅ Navigate
-    navigate("/dashboard", { replace: true });
-
-  } catch (err) {
-    console.error("LOGIN ERROR:", err); // 🔥 DEBUG
-    setMsg("Server is busy. Try again.");
-  } finally {
-    setLoading(false);
+  async function handle(e) {
+    e.preventDefault();
+    if (loading) return;
+    setLoading(true); setMsg("");
+    try {
+      const res  = await fetch(`${API}/login`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email,password}) });
+      const data = await res.json();
+      if (!res.ok) { setMsg(data.detail || "Wrong email or password."); return; }
+      localStorage.setItem("token", data.access_token);
+      navigate("/dashboard", { replace:true });
+    } catch { setMsg("Can't reach the server. Check your internet."); }
+    finally  { setLoading(false); }
   }
+
+  return (
+    <form onSubmit={handle} className="slide-in">
+      <div style={{marginBottom:14}}>
+        <label style={lbl}>Email address</label>
+        <input type="email" required placeholder="you@college.edu" value={email} onChange={e=>setEmail(e.target.value)} className="inp" autoComplete="email" />
+      </div>
+      <div style={{marginBottom:6}}>
+        <label style={lbl}>Password</label>
+        <PasswordInput value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" />
+      </div>
+      <div style={{textAlign:"right", marginBottom:18}}>
+        <button type="button" className="link-btn" onClick={onForgot}>Forgot password?</button>
+      </div>
+      {msg && <div className="alert error" style={{marginBottom:14}}>⚠️ {msg}</div>}
+      <button type="submit" disabled={loading} className="btn" style={primaryBtn(loading)}>
+        {loading && <Spinner />}{loading ? "Logging in…" : "Log in →"}
+      </button>
+    </form>
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
