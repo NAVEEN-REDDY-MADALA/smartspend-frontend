@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { BASE_URL } from "../api";
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
@@ -52,8 +53,7 @@ function injectCSS() {
   document.head.appendChild(s);
 }
 
-// const API = "https://smartspend-backend-aupt.onrender.com/api/auth";
-const API = "https://smartspend-backend-production-6f21.up.railway.app/api/auth";
+const API = `${BASE_URL}/api/auth`;
 const lbl = { fontSize:12, fontWeight:600, color:"var(--ink2)", display:"block", marginBottom:5 };
 
 function primaryBtn(loading, disabled) {
@@ -101,9 +101,6 @@ function getStrength(pw) {
   ][s];
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// LOGIN
-// ══════════════════════════════════════════════════════════════════════════════
 function LoginForm({ onForgot }) {
   const navigate = useNavigate();
   const [email, setEmail]       = useState("");
@@ -146,9 +143,6 @@ function LoginForm({ onForgot }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// REGISTER
-// ══════════════════════════════════════════════════════════════════════════════
 function RegisterForm({ onSuccess }) {
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
@@ -216,13 +210,10 @@ function RegisterForm({ onSuccess }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// FORGOT PASSWORD — 3 steps: Email → OTP → New Password
-// ══════════════════════════════════════════════════════════════════════════════
 function ForgotForm({ onBack }) {
-  const [step, setStep]         = useState(1); // 1=email, 2=otp, 3=newpass
+  const [step, setStep]         = useState(1);
   const [email, setEmail]       = useState("");
-  const [otpDisplay, setOtpDisplay] = useState(""); // OTP shown from API
+  const [otpDisplay, setOtpDisplay] = useState("");
   const [otpInput, setOtpInput] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [newPass, setNewPass]   = useState("");
@@ -233,7 +224,6 @@ function ForgotForm({ onBack }) {
 
   const mismatch = confirmPass && newPass !== confirmPass;
 
-  // ── Step 1: Request OTP ────────────────────────────────────────────────────
   async function handleRequestOTP(e) {
     e.preventDefault();
     if (loading) return;
@@ -242,13 +232,12 @@ function ForgotForm({ onBack }) {
       const res  = await fetch(`${API}/forgot-password`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email}) });
       const data = await res.json();
       if (!res.ok) { setMsg(data.detail || "Email not found."); return; }
-      setOtpDisplay(data.otp); // Show OTP in UI since no email service
+      setOtpDisplay(data.otp);
       setStep(2);
     } catch { setMsg("Can't reach the server. Check your internet."); }
     finally  { setLoading(false); }
   }
 
-  // ── Step 2: Verify OTP ─────────────────────────────────────────────────────
   async function handleVerifyOTP(e) {
     e.preventDefault();
     if (loading) return;
@@ -263,7 +252,6 @@ function ForgotForm({ onBack }) {
     finally  { setLoading(false); }
   }
 
-  // ── Step 3: Reset Password ─────────────────────────────────────────────────
   async function handleReset(e) {
     e.preventDefault();
     if (loading) return;
@@ -284,14 +272,12 @@ function ForgotForm({ onBack }) {
 
   return (
     <div className="slide-in">
-      {/* Back */}
       <button type="button" onClick={onBack} style={{
         background:"none", border:"none", cursor:"pointer", color:"var(--ink3)",
         fontSize:13, fontWeight:500, display:"flex", alignItems:"center",
         gap:4, marginBottom:18, padding:0, fontFamily:"inherit",
       }}>← Back to login</button>
 
-      {/* Step indicator */}
       <div style={{ display:"flex", gap:6, marginBottom:22, alignItems:"center" }}>
         {stepLabels.map((label, i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:6, flex: i<2 ? "1" : "none" }}>
@@ -304,21 +290,16 @@ function ForgotForm({ onBack }) {
             }}>
               {step > i+1 ? "✓" : i+1}
             </div>
-            <span style={{ fontSize:11, fontWeight:600, color: step === i+1 ? "var(--accent)" : "var(--ink3)" }}>
-              {label}
-            </span>
+            <span style={{ fontSize:11, fontWeight:600, color: step === i+1 ? "var(--accent)" : "var(--ink3)" }}>{label}</span>
             {i < 2 && <div style={{ flex:1, height:2, background: step > i+1 ? "var(--green)" : "#e5e7eb", borderRadius:99, transition:"background .3s" }} />}
           </div>
         ))}
       </div>
 
-      {/* ── STEP 1: Email ── */}
       {step === 1 && (
         <form onSubmit={handleRequestOTP}>
           <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Forgot your password? 🔑</div>
-          <p style={{ fontSize:13, color:"var(--ink3)", marginBottom:18, lineHeight:1.6 }}>
-            Enter your registered email. We'll generate a 6-digit OTP for you.
-          </p>
+          <p style={{ fontSize:13, color:"var(--ink3)", marginBottom:18, lineHeight:1.6 }}>Enter your registered email. We'll generate a 6-digit OTP for you.</p>
           <div style={{marginBottom:18}}>
             <label style={lbl}>Registered email</label>
             <input type="email" required placeholder="you@college.edu" value={email} onChange={e=>setEmail(e.target.value)} className="inp" autoComplete="email" />
@@ -330,21 +311,14 @@ function ForgotForm({ onBack }) {
         </form>
       )}
 
-      {/* ── STEP 2: OTP ── */}
       {step === 2 && (
         <form onSubmit={handleVerifyOTP}>
           <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Enter your OTP 🔢</div>
-          <p style={{ fontSize:13, color:"var(--ink3)", marginBottom:16, lineHeight:1.6 }}>
-            Your one-time password for <strong>{email}</strong>:
-          </p>
-
-          {/* Show OTP clearly since no email service */}
           <div style={{ marginBottom:18, textAlign:"center" }}>
             <p style={{ fontSize:11, color:"var(--ink3)", marginBottom:8, fontWeight:600 }}>YOUR OTP CODE</p>
             <div className="otp-box">{otpDisplay}</div>
             <p style={{ fontSize:11, color:"var(--ink3)", marginTop:6 }}>⏱ Valid for 10 minutes</p>
           </div>
-
           <div style={{marginBottom:18}}>
             <label style={lbl}>Enter OTP above</label>
             <input type="text" required placeholder="______" value={otpInput}
@@ -352,39 +326,19 @@ function ForgotForm({ onBack }) {
               className="inp" maxLength={6} inputMode="numeric"
               style={{ textAlign:"center", fontSize:20, fontWeight:700, letterSpacing:6 }} />
           </div>
-
           {msg && <div className="alert error" style={{marginBottom:14}}>⚠️ {msg}</div>}
-
           <button type="submit" disabled={loading || otpInput.length < 6} className="btn" style={primaryBtn(loading, otpInput.length < 6)}>
             {loading && <Spinner />}{loading ? "Verifying…" : "Verify OTP →"}
           </button>
-
-          <div style={{ textAlign:"center", marginTop:12 }}>
-            <button type="button" className="link-btn" style={{fontSize:12}} onClick={() => { setStep(1); setMsg(""); setOtpInput(""); }}>
-              Resend OTP
-            </button>
-          </div>
         </form>
       )}
 
-      {/* ── STEP 3: New Password ── */}
       {step === 3 && (
         <form onSubmit={handleReset}>
           <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>Set new password 🔐</div>
-          <p style={{ fontSize:13, color:"var(--ink3)", marginBottom:18, lineHeight:1.6 }}>
-            Choose a strong password for your account.
-          </p>
           <div style={{marginBottom:13}}>
             <label style={lbl}>New password</label>
             <PasswordInput value={newPass} onChange={e=>setNewPass(e.target.value)} autoComplete="new-password" />
-            {newPass && (
-              <div style={{marginTop:6}}>
-                <div style={{height:3, background:"#f3f4f6", borderRadius:99, overflow:"hidden"}}>
-                  <div className="strength-bar" style={{width:getStrength(newPass).w, background:getStrength(newPass).color}} />
-                </div>
-                <span style={{fontSize:11, color:getStrength(newPass).color, fontWeight:600}}>{getStrength(newPass).label}</span>
-              </div>
-            )}
           </div>
           <div style={{marginBottom:18}}>
             <label style={lbl}>Confirm new password</label>
@@ -402,9 +356,6 @@ function ForgotForm({ onBack }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MAIN EXPORT
-// ══════════════════════════════════════════════════════════════════════════════
 export default function Login() {
   injectCSS();
   const navigate = useNavigate();
@@ -426,9 +377,7 @@ export default function Login() {
         borderRadius:18, boxShadow:"0 32px 80px rgba(0,0,0,.3)", overflow:"hidden",
       }}>
         <div style={{ height:4, background:"linear-gradient(90deg,#7c5cbf,#a78bfa)" }} />
-
         <div style={{ padding:"32px 30px 28px" }}>
-          {/* Brand */}
           <div style={{ textAlign:"center", marginBottom:24 }}>
             <div style={{
               width:50, height:50, borderRadius:14,
@@ -441,13 +390,10 @@ export default function Login() {
               {showForgot ? "SmartSpend" : tab==="login" ? "Welcome back 👋" : "Join SmartSpend 🎓"}
             </div>
             <div style={{ fontSize:12.5, color:"var(--ink3)" }}>
-              {showForgot ? "Student expense tracker"
-                : tab==="login" ? "Your student finance tracker"
-                : "Start tracking your expenses for free"}
+              {showForgot ? "Student expense tracker" : tab==="login" ? "Your student finance tracker" : "Start tracking your expenses for free"}
             </div>
           </div>
 
-          {/* Tab switcher */}
           {!showForgot && (
             <div style={{ display:"flex", background:"#f3f4f6", borderRadius:10, padding:3, marginBottom:22, gap:3 }}>
               <button className={`tab-btn${tab==="login"?" active":""}`} onClick={()=>setTab("login")}>Log in</button>
@@ -455,7 +401,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Content */}
           {showForgot
             ? <ForgotForm onBack={() => setShowForgot(false)} />
             : tab==="login"
@@ -463,7 +408,6 @@ export default function Login() {
               : <RegisterForm onSuccess={() => setTab("login")} />
           }
 
-          {/* Footer */}
           {!showForgot && (
             <div style={{ textAlign:"center", marginTop:16, fontSize:11.5, color:"var(--ink3)", lineHeight:1.7 }}>
               {tab==="login"

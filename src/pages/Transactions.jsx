@@ -528,7 +528,7 @@ export default function Transactions() {
   const [isMobile,     setIsMobile]     = useState(window.innerWidth<=768);
 
   const CATEGORIES = ["Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Salary","Refund","Cashback","Other"];
-  const API = "https://smartspend-backend-aupt.onrender.com";
+  const API = "https://smartspend-backend-production-6f21.up.railway.app";
 
   useEffect(()=>{
     const onResize=()=>setIsMobile(window.innerWidth<=768);

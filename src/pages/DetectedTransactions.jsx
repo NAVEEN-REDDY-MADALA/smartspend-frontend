@@ -398,7 +398,7 @@ export default function DetectedTransactions() {
   const [showFilter, setShowFilter]=useState(false);
   const [filters,    setFilters]   =useState({type:"all",amount:"all",category:"All",date:"all"});
 
-  const API="https://smartspend-backend-aupt.onrender.com";
+  const API="https://smartspend-backend-production-6f21.up.railway.app";
 
   useEffect(()=>{load();const iv=setInterval(load,5000);return()=>clearInterval(iv);},[]);
 
