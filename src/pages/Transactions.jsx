@@ -977,3 +977,4 @@ export default function Transactions() {
     </div>
   );
 }
+/// Mobile transaction card component
