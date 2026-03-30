@@ -50,15 +50,24 @@ const CSS = `
   @media(max-width:900px){
     .sidebar{display:none!important;}
     .desk-hdr{display:none!important;}
+    .desk-only{display:none!important;}
     .mob-only{display:flex!important;}
     .dash-content{padding:10px 12px calc(var(--nav-h) + 16px)!important;}
     .stats-grid{grid-template-columns:1fr 1fr!important;gap:8px!important;}
     .main-grid{grid-template-columns:1fr!important;}
     .month-select{min-width:0;font-size:12px;}
+    /* Transaction row responsive */
+    .tx-desk-row{display:none!important;}
+    .tx-mob-row{display:flex!important;}
   }
   @media(min-width:901px){
     .mob-only{display:none!important;}
     .desk-hdr{display:flex!important;}
+    .desk-only{display:grid!important;}
+    .desk-only-block{display:block!important;}
+    /* Transaction row responsive */
+    .tx-desk-row{display:grid!important;}
+    .tx-mob-row{display:none!important;}
   }
 `;
 
@@ -437,17 +446,38 @@ export default function Dashboard() {
               ):recent.map((t,i)=>{
                 const auto=isAutoTx(t);
                 const merchant=t.merchant||t.merchant_name||t.description||null;
+                const cat=t.category||"Other";
+                const dateStr=fmtTxDate(t.created_at||t.date);
                 return (
-                  <div key={i} className="txrow" style={{display:"grid",gridTemplateColumns:TX_COLS,padding:"10px 16px",borderBottom:i<recent.length-1?"1px solid var(--border)":"none",alignItems:"center",borderLeft:`3px solid ${auto?"var(--blue)":"transparent"}`}}>
-                    <div style={{width:28,height:28,borderRadius:7,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>{CAT_EMOJI[t.category]||"💳"}</div>
-                    <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.category||"—"}</div>
-                    <div style={{fontSize:12,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
-                    <div style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>₹{fmt(t.amount)}</div>
-                    <div style={{fontSize:11,color:"var(--ink3)"}}>{fmtTxDate(t.created_at||t.date)}</div>
-                    <div>
-                      <span className="badge" style={{background:auto?"var(--bbg)":"#f9fafb",color:auto?"var(--blue)":"var(--ink3)",border:`1px solid ${auto?"#bfdbfe":"var(--border)"}`,fontSize:10}}>
-                        {auto?"🤖 Auto":"✍️ Manual"}
-                      </span>
+                  <div key={i} style={{borderBottom:i<recent.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${auto?"var(--blue)":"transparent"}`}}>
+                    {/* ── Desktop row (hidden on mobile via CSS) ── */}
+                    <div className="txrow tx-desk-row" style={{display:"grid",gridTemplateColumns:TX_COLS,padding:"10px 16px",alignItems:"center"}}>
+                      <div style={{width:28,height:28,borderRadius:7,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>{CAT_EMOJI[cat]||"💳"}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat}</div>
+                      <div style={{fontSize:12,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>₹{fmt(t.amount)}</div>
+                      <div style={{fontSize:11,color:"var(--ink3)"}}>{dateStr}</div>
+                      <div>
+                        <span className="badge" style={{background:auto?"var(--bbg)":"#f9fafb",color:auto?"var(--blue)":"var(--ink3)",border:`1px solid ${auto?"#bfdbfe":"var(--border)"}`,fontSize:10}}>
+                          {auto?"🤖 Auto":"✍️ Manual"}
+                        </span>
+                      </div>
+                    </div>
+                    {/* ── Mobile card row (hidden on desktop via CSS) ── */}
+                    <div className="tx-mob-row" style={{display:"none",padding:"10px 14px",alignItems:"center",gap:10}}>
+                      <div style={{width:36,height:36,borderRadius:9,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                        {CAT_EMOJI[cat]||"💳"}
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                          <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>{cat}</span>
+                          <span style={{fontSize:14,fontWeight:800,color:"var(--ink)",fontFamily:"'Sora',sans-serif"}}>₹{fmt(t.amount)}</span>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <span style={{fontSize:11,color:"var(--ink3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{merchant||"—"}</span>
+                          <span style={{fontSize:10,color:"var(--ink4)",flexShrink:0}}>{dateStr}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
