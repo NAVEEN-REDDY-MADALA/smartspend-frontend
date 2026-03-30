@@ -1,16 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import {
   injectMobileCSS, fmt,
   Icon, ICONS, BottomNav
 } from "./MobileLayout";
 
+/* ─── CSS ─────────────────────────────────────────────────────────────────── */
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
   :root {
     --sb:#2d1b69; --accent:#7c5cbf; --accent2:#a78bfa;
-    --bg:#f4f3f8; --surface:#fff; --border:#e5e7eb;
+    --bg:#f0eff6; --surface:#fff; --border:#e5e7eb;
     --ink:#111827; --ink2:#374151; --ink3:#6b7280; --ink4:#9ca3af;
     --green:#059669; --gbg:#ecfdf5; --gborder:#a7f3d0;
     --red:#dc2626;   --rbg:#fef2f2; --rborder:#fecaca;
@@ -19,70 +20,93 @@ const CSS = `
     --purple:#7c3aed;--pbg:#f5f3ff; --pborder:#ddd6fe;
     --font:'Plus Jakarta Sans',system-ui,sans-serif;
     --nav-h:64px;
+    --hdr-h:0px;
   }
   html,body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;overscroll-behavior:none;}
   ::-webkit-scrollbar{width:3px;} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
   @keyframes slideRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
   @keyframes fadeBack{from{opacity:0}to{opacity:1}}
-  @keyframes slideUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
   .fade{animation:fadeIn .3s ease both}
   .slink{transition:background .15s,color .15s;cursor:pointer;text-decoration:none;display:flex;}
   .slink:hover{background:rgba(255,255,255,.09)!important;color:#fff!important}
   .slink.active{background:rgba(255,255,255,.16)!important;color:#fff!important}
   .inp{padding:8px 12px;border-radius:7px;border:1px solid var(--border);font-size:13px;font-family:inherit;color:var(--ink);outline:none;background:var(--surface);transition:border-color .15s;}
   .inp:focus{border-color:var(--accent);}
-  .txrow{transition:background .12s;cursor:pointer;}
-  .txrow:hover{background:#f0f4ff!important;}
-  .txrow.selected{background:#eff6ff!important;}
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;}
   .pulse{animation:pulse 2s infinite;}
   .drawer{animation:slideRight .22s ease both;}
   .overlay{animation:fadeBack .2s ease both;}
-  .tx-card{transition:transform .1s,box-shadow .15s;}
-  .tx-card:active{transform:scale(.99);}
 
   /* Sidebar */
   .sidebar{width:210px;flex-shrink:0;background:var(--sb);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow:hidden;}
 
-  /* Scrollable chips */
+  /* Chips scroll */
   .chips-scroll{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;}
   .chips-scroll::-webkit-scrollbar{display:none;}
 
-  /* Mobile chips — compact, pill style */
-  .mob-chip{
-    flex-shrink:0;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;
-    cursor:pointer;font-family:var(--font);border:1.5px solid rgba(255,255,255,.2);
-    background:rgba(255,255,255,.1);color:rgba(255,255,255,.75);
+  /* Type tab pills */
+  .type-tab{
+    flex:1;padding:8px 4px;border-radius:9px;font-size:12px;font-weight:700;
+    cursor:pointer;font-family:var(--font);border:none;
+    background:transparent;color:rgba(255,255,255,.55);
+    transition:all .18s;white-space:nowrap;text-align:center;
+  }
+  .type-tab.active{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18);}
+
+  /* Date preset chips */
+  .date-chip{
+    flex-shrink:0;padding:5px 13px;border-radius:99px;font-size:11px;font-weight:600;
+    cursor:pointer;font-family:var(--font);
+    background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);
+    border:1.5px solid rgba(255,255,255,.15);
     transition:all .15s;white-space:nowrap;
   }
-  .mob-chip.active{background:#fff;color:var(--accent);border-color:#fff;}
+  .date-chip.active{background:rgba(255,255,255,.22);color:#fff;border-color:rgba(255,255,255,.4);}
+
+  /* Tx card */
+  .tx-card{
+    background:var(--surface);border-radius:14px;
+    border:1px solid var(--border);
+    display:flex;align-items:center;gap:13px;
+    padding:13px 14px;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);
+    cursor:pointer;
+    transition:transform .12s,box-shadow .15s;
+    animation:cardIn .25s ease both;
+  }
+  .tx-card:active{transform:scale(.985);box-shadow:0 0 0 rgba(0,0,0,0);}
 
   /* Sheet */
-  .sheet-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);}
-  .sheet-panel{position:fixed;bottom:0;left:0;right:0;z-index:201;background:var(--surface);border-radius:20px 20px 0 0;max-height:82vh;overflow-y:auto;animation:slideUp .3s cubic-bezier(.34,1.2,.64,1) both;padding-bottom:env(safe-area-inset-bottom,16px);}
-  .sheet-handle{width:38px;height:4px;background:var(--border);border-radius:99px;margin:10px auto 0;}
+  .sheet-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);}
+  .sheet-panel{position:fixed;bottom:0;left:0;right:0;z-index:201;background:var(--surface);border-radius:22px 22px 0 0;max-height:85vh;overflow:hidden;animation:slideUp .3s cubic-bezier(.34,1.1,.64,1) both;}
+  .sheet-handle{width:36px;height:4px;background:#e5e7eb;border-radius:99px;margin:12px auto 0;}
 
   @media(max-width:768px){
     .sidebar{display:none!important;}
     .desk-hdr{display:none!important;}
     .desk-only{display:none!important;}
     .mob-only{display:flex!important;}
-    .main-scroll{padding:10px 12px calc(var(--nav-h) + 16px)!important;}
-    .summary-grid{grid-template-columns:1fr 1fr!important;gap:8px!important;}
+    .main-scroll{padding:10px 12px calc(var(--nav-h) + 20px)!important;}
+    .summary-grid{display:none!important;}
   }
   @media(min-width:769px){
     .mob-only{display:none!important;}
     .desk-hdr{display:flex!important;}
     .desk-only{display:block!important;}
+    .summary-grid{display:grid!important;grid-template-columns:repeat(4,1fr)!important;}
   }
 `;
 
 function injectCSS() {
-  if (typeof document==="undefined"||document.getElementById("__tx_mob__")) return;
-  const s=document.createElement("style"); s.id="__tx_mob__"; s.textContent=CSS;
+  if (typeof document==="undefined"||document.getElementById("__tx_v2__")) return;
+  const s=document.createElement("style"); s.id="__tx_v2__"; s.textContent=CSS;
   document.head.appendChild(s);
   injectMobileCSS();
 }
@@ -233,7 +257,7 @@ function getTxDisplay(t) {
   return{isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor,absAmount};
 }
 
-/* ─── Detail Drawer ──────────────────────────────────────────────────────── */
+/* ─── Detail Sheet (mobile-style bottom sheet) ───────────────────────────── */
 function DetailDrawer({txn,onClose}) {
   if(!txn) return null;
   const{isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,absAmount}=getTxDisplay(txn);
@@ -248,17 +272,18 @@ function DetailDrawer({txn,onClose}) {
   ];
   return (
     <>
-      <div className="overlay" onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(17,24,39,.4)",zIndex:100,backdropFilter:"blur(2px)"}}/>
-      <div className="drawer" style={{position:"fixed",top:0,right:0,bottom:0,width:"min(380px,100vw)",background:"var(--surface)",zIndex:101,boxShadow:"-8px 0 40px rgba(0,0,0,.15)",display:"flex",flexDirection:"column"}}>
-        <div style={{padding:"18px 22px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div className="sheet-overlay" onClick={onClose}/>
+      <div className="sheet-panel">
+        <div className="sheet-handle"/>
+        <div style={{padding:"20px 22px 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:15,fontWeight:700,color:"var(--ink)"}}>Transaction Details</div>
           <button onClick={onClose} style={{width:30,height:30,borderRadius:7,border:"1px solid var(--border)",background:"var(--bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
             <Icon d={ICONS.x} size={13} color="var(--ink3)"/>
           </button>
         </div>
-        <div style={{margin:"18px 22px 0",padding:"22px",borderRadius:14,textAlign:"center",background:accentBg,border:`1px solid ${accentBorder}`}}>
-          <div style={{fontSize:36,marginBottom:8}}>{CAT_EMOJI[category]||(isCredit?"💰":"💳")}</div>
-          <div style={{fontSize:30,fontWeight:800,color:accentColor,marginBottom:4,fontFamily:"'Sora',sans-serif"}}>
+        <div style={{margin:"16px 22px 0",padding:"20px",borderRadius:14,textAlign:"center",background:accentBg,border:`1px solid ${accentBorder}`}}>
+          <div style={{fontSize:34,marginBottom:8}}>{CAT_EMOJI[category]||(isCredit?"💰":"💳")}</div>
+          <div style={{fontSize:28,fontWeight:800,color:accentColor,marginBottom:4,fontFamily:"'Sora',sans-serif"}}>
             {isCredit?"+":"−"}₹{fmt(absAmount)}
           </div>
           <div style={{fontSize:12,color:"var(--ink3)",marginBottom:10}}>{category}{merchant?" · "+merchant:""}</div>
@@ -271,7 +296,7 @@ function DetailDrawer({txn,onClose}) {
             </span>
           </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"16px 22px"}}>
+        <div style={{padding:"8px 22px 0"}}>
           {rows.map((row,i)=>(
             <div key={row.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 0",borderBottom:i<rows.length-1?"1px solid var(--border)":"none"}}>
               <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -282,8 +307,8 @@ function DetailDrawer({txn,onClose}) {
             </div>
           ))}
         </div>
-        <div style={{padding:"14px 22px",borderTop:"1px solid var(--border)"}}>
-          <button onClick={onClose} style={{width:"100%",padding:"11px",borderRadius:9,background:"var(--accent)",border:"none",color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Close</button>
+        <div style={{padding:"16px 22px 0"}}>
+          <button onClick={onClose} style={{width:"100%",padding:"13px",borderRadius:12,background:"var(--accent)",border:"none",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Done</button>
         </div>
       </div>
     </>
@@ -293,82 +318,202 @@ function DetailDrawer({txn,onClose}) {
 /* ─── Mobile Filter Sheet ────────────────────────────────────────────────── */
 function FilterSheet({category,setCategory,dateFrom,setDateFrom,dateTo,setDateTo,onClose,onClear}) {
   const CATEGORIES=["Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Salary","Refund","Cashback","Other"];
+  // Button height + padding so content doesn't hide behind it
+  const BTN_H = 80;
   return (
     <>
       <div className="sheet-overlay" onClick={onClose}/>
-      <div className="sheet-panel">
+
+      {/* Sheet panel — auto height, scrollable, no overflow:hidden */}
+      <div style={{
+        position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+        background:"var(--surface)",borderRadius:"22px 22px 0 0",
+        maxHeight:"78vh",overflowY:"auto",
+        animation:"slideUp .3s cubic-bezier(.34,1.1,.64,1) both",
+        paddingBottom:BTN_H
+      }}>
         <div className="sheet-handle"/>
-        <div style={{padding:"16px 20px 8px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-            <span style={{fontSize:16,fontWeight:700,color:"var(--ink)"}}>More Filters</span>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={onClear} style={{fontSize:12,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>Clear all</button>
-              <button onClick={onClose} style={{width:30,height:30,borderRadius:99,border:"1px solid var(--border)",background:"var(--bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Icon d={ICONS.x} size={13} color="var(--ink3)"/>
-              </button>
-            </div>
+
+        {/* Header */}
+        <div style={{padding:"12px 20px 16px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"var(--surface)",zIndex:1}}>
+          <span style={{fontSize:16,fontWeight:700,color:"var(--ink)"}}>Filters</span>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <button onClick={onClear} style={{fontSize:12,color:"var(--accent)",fontWeight:700,fontFamily:"inherit",padding:"5px 12px",borderRadius:99,border:"1px solid var(--pborder)",background:"var(--pbg)",cursor:"pointer"}}>Clear all</button>
+            <button onClick={onClose} style={{width:30,height:30,borderRadius:99,border:"1px solid var(--border)",background:"var(--bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Icon d={ICONS.x} size={13} color="var(--ink3)"/>
+            </button>
           </div>
-          <div style={{marginBottom:20}}>
+        </div>
+
+        {/* Content */}
+        <div style={{padding:"20px 20px 8px"}}>
+          <div style={{marginBottom:24}}>
             <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Category</div>
-            <select value={category} onChange={e=>setCategory(e.target.value)} className="inp" style={{width:"100%",padding:"12px",fontSize:14}}>
+            <select value={category} onChange={e=>setCategory(e.target.value)} className="inp" style={{width:"100%",padding:"13px",fontSize:14}}>
               <option value="">All categories</option>
               {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div style={{marginBottom:24}}>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Custom Date Range</div>
-            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".8px",marginBottom:10}}>Date Range</div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:10,color:"var(--ink4)",marginBottom:4,fontWeight:600}}>FROM</div>
+                <div style={{fontSize:10,color:"var(--ink4)",marginBottom:5,fontWeight:600}}>FROM</div>
                 <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="inp" style={{width:"100%",padding:"10px"}}/>
               </div>
-              <div style={{color:"var(--ink4)",marginTop:14}}>→</div>
+              <div style={{color:"var(--ink4)",paddingBottom:10,fontSize:18}}>→</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:10,color:"var(--ink4)",marginBottom:4,fontWeight:600}}>TO</div>
+                <div style={{fontSize:10,color:"var(--ink4)",marginBottom:5,fontWeight:600}}>TO</div>
                 <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="inp" style={{width:"100%",padding:"10px"}}/>
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{width:"100%",padding:"14px",borderRadius:10,background:"var(--accent)",border:"none",color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"inherit",marginBottom:8}}>
-            Apply Filters
-          </button>
         </div>
+      </div>
+
+      {/* Apply button — position:fixed, ALWAYS visible at screen bottom */}
+      <div style={{
+        position:"fixed",bottom:0,left:0,right:0,
+        zIndex:202,
+        padding:"12px 20px",
+        paddingBottom:"max(16px, env(safe-area-inset-bottom, 16px))",
+        background:"var(--surface)",
+        borderTop:"1px solid var(--border)",
+      }}>
+        <button onClick={onClose} style={{
+          width:"100%",padding:"15px",borderRadius:13,
+          background:"linear-gradient(135deg,#7c5cbf,#a78bfa)",
+          border:"none",color:"#fff",fontSize:15,fontWeight:700,
+          cursor:"pointer",fontFamily:"inherit",
+          boxShadow:"0 4px 16px rgba(124,92,191,.35)",
+        }}>
+          ✓ Apply Filters
+        </button>
       </div>
     </>
   );
 }
 
-/* ─── Mobile Transaction Card ────────────────────────────────────────────── */
-function MobileTxCard({t,onClick}) {
-  const{isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,borderColor,absAmount}=getTxDisplay(t);
-  const dateParts=dateStr.split(",");
-  const datePart=dateParts[0]?.trim()||dateStr;
-  const timePart=dateParts.slice(1).join(",").trim();
+/* ─── NEW: Redesigned Mobile Transaction Card ────────────────────────────── */
+function MobileTxCard({t,onClick,animDelay=0}) {
+  const{isCredit,auto,merchant,category,dateStr,accentColor,accentBg,accentBorder,absAmount}=getTxDisplay(t);
+
+  // Extract date and time parts cleanly
+  const parts=dateStr.split(",");
+  const datePart=parts[0]?.trim()||"";
+  const timePart=parts.slice(1).join(",").trim()||"";
+
   return (
     <div className="tx-card" onClick={onClick}
-      style={{background:"var(--surface)",borderRadius:12,padding:"12px 14px",border:"1px solid var(--border)",borderLeft:`4px solid ${borderColor}`,display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
-      <div style={{width:40,height:40,borderRadius:10,background:accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
+      style={{animationDelay:`${animDelay}ms`}}>
+
+      {/* Icon */}
+      <div style={{
+        width:44,height:44,borderRadius:12,
+        background:accentBg,
+        border:`1.5px solid ${accentBorder}`,
+        display:"flex",alignItems:"center",justifyContent:"center",
+        fontSize:20,flexShrink:0
+      }}>
         {CAT_EMOJI[category]||(isCredit?"💰":"💳")}
       </div>
+
+      {/* Middle content */}
       <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
-          <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"52%"}}>
+        {/* Top row: category + amount */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:3}}>
+          <span style={{fontSize:14,fontWeight:700,color:"var(--ink)",letterSpacing:"-0.2px"}}>
             {category}
-          </div>
-          <div style={{fontSize:15,fontWeight:800,color:accentColor,fontFamily:"'Sora',sans-serif",letterSpacing:"-0.3px",flexShrink:0}}>
+          </span>
+          <span style={{
+            fontSize:16,fontWeight:800,
+            color:accentColor,
+            fontFamily:"'Sora',sans-serif",
+            letterSpacing:"-0.5px",
+            flexShrink:0,marginLeft:8
+          }}>
             {isCredit?"+":"−"}₹{fmt(absAmount)}
-          </div>
-        </div>
-        <div style={{fontSize:11,color:"var(--ink3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginBottom:4}}>
-          {merchant||"—"}
-        </div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:4}}>
-          <span style={{fontSize:10,color:"var(--ink4)"}}>{datePart}{timePart?` · ${timePart}`:""}</span>
-          <span className="badge" style={{background:accentBg,color:accentColor,border:`1px solid ${accentBorder}`,fontSize:9,padding:"1px 6px",flexShrink:0}}>
-            {typeBadgeLabel(isCredit,category)}
           </span>
         </div>
+
+        {/* Merchant name */}
+        <div style={{
+          fontSize:12,color:"var(--ink3)",
+          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+          marginBottom:6,fontWeight:500
+        }}>
+          {merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>No merchant</span>}
+        </div>
+
+        {/* Bottom row: date · type badge · source badge */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+          {/* Left: date + time */}
+          <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+            <span style={{
+              fontSize:10,color:"var(--ink4)",fontWeight:500,
+              background:"var(--bg)",padding:"2px 7px",borderRadius:99,
+              border:"1px solid var(--border)",flexShrink:0
+            }}>
+              {datePart}
+            </span>
+            {timePart&&(
+              <span style={{fontSize:10,color:"var(--ink4)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{timePart}</span>
+            )}
+          </div>
+          {/* Right: type + source badges */}
+          <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+            <span style={{
+              display:"inline-flex",alignItems:"center",gap:3,
+              padding:"2px 8px",borderRadius:99,
+              fontSize:10,fontWeight:700,
+              background:accentBg,color:accentColor,
+              border:`1px solid ${accentBorder}`,
+            }}>
+              {typeBadgeLabel(isCredit,category)}
+            </span>
+            <span style={{
+              display:"inline-flex",alignItems:"center",gap:3,
+              padding:"2px 8px",borderRadius:99,
+              fontSize:10,fontWeight:700,
+              background:auto?"var(--bbg)":"var(--abg)",
+              color:auto?"var(--blue)":"var(--amber)",
+              border:`1px solid ${auto?"var(--bborder)":"var(--aborder)"}`,
+            }}>
+              {auto?"🤖 Auto":"✍️ Manual"}
+            </span>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/* ─── NEW: Compact Summary Banner (horizontal scroll) ────────────────────── */
+function SummaryBanner({filtered}) {
+  const totalDebit=filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0);
+  const totalCredit=filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);
+  const net=totalCredit-totalDebit;
+  const netPositive=net>=0;
+
+  const stats=[
+    {label:"Transactions",value:filtered.length,sub:"total",col:"var(--accent)",bg:"var(--pbg)",border:"var(--pborder)"},
+    {label:"Income",value:"₹"+fmt(totalCredit),sub:"received",col:"var(--green)",bg:"var(--gbg)",border:"var(--gborder)"},
+    {label:"Expenses",value:"₹"+fmt(totalDebit),sub:"spent",col:"var(--red)",bg:"var(--rbg)",border:"var(--rborder)"},
+    {label:"Net Balance",value:(netPositive?"+":"-")+"₹"+fmt(Math.abs(net)),sub:netPositive?"more in 🎉":"more out ⚠️",col:netPositive?"var(--green)":"var(--red)",bg:netPositive?"var(--gbg)":"var(--rbg)",border:netPositive?"var(--gborder)":"var(--rborder)"},
+  ];
+
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+      {stats.map(s=>(
+        <div key={s.label} style={{
+          background:s.bg,border:`1px solid ${s.border}`,
+          borderRadius:12,padding:"11px 13px",
+        }}>
+          <div style={{fontSize:10,fontWeight:600,color:"var(--ink4)",marginBottom:4,textTransform:"uppercase",letterSpacing:".5px"}}>{s.label}</div>
+          <div style={{fontSize:16,fontWeight:800,color:s.col,fontFamily:"'Sora',sans-serif",letterSpacing:"-0.5px",marginBottom:1}}>{s.value}</div>
+          <div style={{fontSize:10,color:"var(--ink4)"}}>{s.sub}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -386,6 +531,10 @@ const QUICK_RANGES=[
   {label:"Last 30d",from:()=>offsetDay(-29),to:()=>todayStr()},
   {label:"This month",from:()=>startOfMonth(),to:()=>todayStr()},
 ];
+
+/* ─── Desktop Table (unchanged) ─────────────────────────────────────────── */
+const COLS="44px 110px 1fr 110px 100px 180px 90px";
+const HEADERS=["","Category","Merchant / From","Amount","Type","Date & Time","Source"];
 
 /* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function Transactions() {
@@ -407,6 +556,7 @@ export default function Transactions() {
   const [activePreset,setActivePreset]=useState("All");
   const [showFilter,setShowFilter]=useState(false);
   const [isMobile,setIsMobile]=useState(window.innerWidth<=768);
+  const searchRef=useRef(null);
 
   const CATEGORIES=["Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Salary","Refund","Cashback","Other"];
   const API="https://smartspend-backend-production-6f21.up.railway.app";
@@ -477,14 +627,7 @@ export default function Transactions() {
   function logout(){localStorage.removeItem("token");navigate("/",{replace:true});}
 
   const hasFilters=search||typeFilter!=="all"||category||dateFrom||dateTo;
-  const totalDebit=filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0);
-  const totalCredit=filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);
-  const debitCount=filtered.filter(t=>t._type==="debit").length;
-  const creditCount=filtered.filter(t=>t._type==="credit").length;
   const activeFilterCount=[search,typeFilter!=="all",category,dateFrom,dateTo].filter(Boolean).length;
-
-  const COLS="44px 110px 1fr 110px 100px 180px 90px";
-  const HEADERS=["","Category","Merchant / From","Amount","Type","Date & Time","Source"];
 
   if(loading) return (
     <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}>
@@ -499,8 +642,11 @@ export default function Transactions() {
     <div style={{display:"flex",minHeight:"100vh"}}>
       <Sidebar onLogout={logout}/>
       <BottomNav/>
+
+      {/* Detail sheet — mobile bottom sheet style */}
       <DetailDrawer txn={selected} onClose={()=>setSelected(null)}/>
 
+      {/* Filter sheet */}
       {showFilter&&isMobile&&(
         <FilterSheet
           category={category} setCategory={setCategory}
@@ -513,52 +659,127 @@ export default function Transactions() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-        {/* ── Mobile Header ── */}
-        <div className="mob-only" style={{flexDirection:"column",background:"var(--sb)",position:"sticky",top:0,zIndex:50}}>
-          {/* Title row */}
-          <div style={{padding:"14px 14px 10px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        {/* ══════════════ REDESIGNED MOBILE HEADER ══════════════ */}
+        <div className="mob-only" style={{
+          flexDirection:"column",
+          background:"var(--sb)",
+          position:"sticky",top:0,zIndex:50,
+          paddingBottom:0,
+        }}>
+
+          {/* Row 1: Title + action buttons */}
+          <div style={{
+            padding:"14px 16px 10px",
+            display:"flex",alignItems:"center",justifyContent:"space-between"
+          }}>
             <div>
-              <div style={{fontSize:16,fontWeight:800,color:"#fff",fontFamily:"'Sora',sans-serif",lineHeight:1}}>My Transactions</div>
-              <div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>{filtered.length} of {all.length} shown</div>
+              <div style={{fontSize:18,fontWeight:800,color:"#fff",fontFamily:"'Sora',sans-serif",lineHeight:1.1}}>
+                Transactions
+              </div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,.45)",marginTop:2,fontWeight:500}}>
+                {filtered.length} of {all.length} shown
+              </div>
             </div>
-            <div style={{display:"flex",gap:8}}>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {/* Refresh */}
               <button onClick={()=>{setSpinning(true);load();}}
-                style={{width:34,height:34,borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:"rgba(255,255,255,.1)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}><Icon d={ICONS.refresh} size={15} color="#fff"/></span>
+                style={{
+                  width:36,height:36,borderRadius:10,
+                  border:"1.5px solid rgba(255,255,255,.2)",
+                  background:"rgba(255,255,255,.1)",
+                  cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"
+                }}>
+                <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}>
+                  <Icon d={ICONS.refresh} size={16} color="#fff"/>
+                </span>
               </button>
+              {/* Filter with badge */}
               <button onClick={()=>setShowFilter(true)}
-                style={{width:34,height:34,borderRadius:9,border:"1px solid rgba(255,255,255,.2)",background:activeFilterCount>0?"rgba(255,255,255,.25)":"rgba(255,255,255,.1)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-                <Icon d={ICONS.filter} size={15} color="#fff"/>
-                {activeFilterCount>0&&<span style={{position:"absolute",top:-3,right:-3,width:15,height:15,borderRadius:"50%",background:"#ef4444",color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{activeFilterCount}</span>}
+                style={{
+                  height:36,borderRadius:10,
+                  border:"1.5px solid rgba(255,255,255,.2)",
+                  background:activeFilterCount>0?"rgba(255,255,255,.2)":"rgba(255,255,255,.1)",
+                  cursor:"pointer",display:"flex",alignItems:"center",gap:5,
+                  padding:"0 12px",position:"relative"
+                }}>
+                <Icon d={ICONS.filter} size={14} color="#fff"/>
+                <span style={{fontSize:11,fontWeight:600,color:"#fff"}}>Filter</span>
+                {activeFilterCount>0&&(
+                  <span style={{
+                    width:16,height:16,borderRadius:"50%",
+                    background:"#ef4444",color:"#fff",
+                    fontSize:8,fontWeight:800,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    marginLeft:2
+                  }}>{activeFilterCount}</span>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Search bar */}
-          <div style={{padding:"0 14px 8px",position:"relative"}}>
-            <span style={{position:"absolute",left:24,top:"50%",transform:"translateY(-55%)",pointerEvents:"none"}}>
-              <Icon d={ICONS.search} size={13} color="rgba(255,255,255,.45)"/>
+          {/* Row 2: Search bar */}
+          <div style={{padding:"0 16px 10px",position:"relative"}}>
+            <span style={{
+              position:"absolute",left:27,top:"50%",
+              transform:"translateY(-55%)",pointerEvents:"none"
+            }}>
+              <Icon d={ICONS.search} size={14} color="rgba(255,255,255,.4)"/>
             </span>
-            <input placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)}
-              style={{width:"100%",padding:"9px 10px 9px 34px",borderRadius:9,border:"1.5px solid rgba(255,255,255,.15)",background:"rgba(255,255,255,.1)",color:"#fff",fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+            <input
+              ref={searchRef}
+              placeholder="Search category, merchant…"
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+              style={{
+                width:"100%",
+                padding:"10px 36px 10px 38px",
+                borderRadius:11,
+                border:"1.5px solid rgba(255,255,255,.15)",
+                background:"rgba(255,255,255,.1)",
+                color:"#fff",fontSize:13,
+                fontFamily:"inherit",outline:"none",
+                letterSpacing:"-.1px"
+              }}/>
             {search&&(
-              <button onClick={()=>setSearch("")} style={{position:"absolute",right:20,top:"50%",transform:"translateY(-55%)",background:"none",border:"none",cursor:"pointer",padding:2,display:"flex",alignItems:"center"}}>
-                <Icon d={ICONS.x} size={12} color="rgba(255,255,255,.6)"/>
+              <button onClick={()=>setSearch("")} style={{
+                position:"absolute",right:24,top:"50%",
+                transform:"translateY(-55%)",
+                background:"rgba(255,255,255,.15)",border:"none",
+                cursor:"pointer",padding:3,display:"flex",
+                alignItems:"center",borderRadius:99
+              }}>
+                <Icon d={ICONS.x} size={11} color="rgba(255,255,255,.7)"/>
               </button>
             )}
           </div>
 
-          {/* Type chips row */}
-          <div style={{padding:"0 14px 8px"}}>
+          {/* Row 3: Type tabs (pill toggle) */}
+          <div style={{
+            margin:"0 16px 10px",
+            background:"rgba(0,0,0,.2)",
+            borderRadius:11,padding:4,
+            display:"flex",gap:0
+          }}>
+            {[
+              {value:"all",label:"All"},
+              {value:"debit",label:"💸 Expenses"},
+              {value:"credit",label:"💰 Income"}
+            ].map(tab=>(
+              <button key={tab.value}
+                className={`type-tab${typeFilter===tab.value?" active":""}`}
+                onClick={()=>setTypeFilter(tab.value)}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Row 4: Date preset chips — scrollable */}
+          <div style={{padding:"0 16px 12px"}}>
             <div className="chips-scroll">
-              {[{value:"all",label:"All"},{value:"debit",label:"💸 Expenses"},{value:"credit",label:"💰 Income"}].map(chip=>(
-                <button key={chip.value} className={`mob-chip${typeFilter===chip.value?" active":""}`} onClick={()=>setTypeFilter(chip.value)}>
-                  {chip.label}
-                </button>
-              ))}
-              <div style={{width:1,background:"rgba(255,255,255,.2)",margin:"0 2px",flexShrink:0}}/>
               {QUICK_RANGES.map(p=>(
-                <button key={p.label} className={`mob-chip${activePreset===p.label?" active":""}`} onClick={()=>applyPreset(p)}>
+                <button key={p.label}
+                  className={`date-chip${activePreset===p.label?" active":""}`}
+                  onClick={()=>applyPreset(p)}>
                   {p.label}
                 </button>
               ))}
@@ -566,8 +787,11 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* ── Desktop Header ── */}
-        <div className="desk-hdr" style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"16px 28px",justifyContent:"space-between",alignItems:"center"}}>
+        {/* ── Desktop Header (unchanged) ── */}
+        <div className="desk-hdr" style={{
+          background:"var(--surface)",borderBottom:"1px solid var(--border)",
+          padding:"16px 28px",justifyContent:"space-between",alignItems:"center"
+        }}>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"var(--ink)",fontFamily:"'Sora',sans-serif"}}>My Transactions</div>
             <div style={{fontSize:13,color:"var(--ink3)",marginTop:2}}>All your expenses and income · Click any row for details</div>
@@ -587,16 +811,24 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* ── Page content ── */}
-        <div className="main-scroll" style={{flex:1,overflowY:"auto",padding:"16px 16px 28px",background:"var(--bg)"}}>
+        {/* ══════════════ PAGE CONTENT ══════════════ */}
+        <div className="main-scroll" style={{
+          flex:1,overflowY:"auto",
+          padding:"14px 16px 28px",
+          background:"var(--bg)"
+        }}>
 
-          {/* Summary cards */}
-          <div className="summary-grid fade" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+          {/* Desktop summary cards — hidden on mobile via CSS */}
+          <div className="desk-only" style={{marginBottom:16}}>
+          <div className="summary-grid fade" style={{
+            display:"grid",gridTemplateColumns:"repeat(4,1fr)",
+            gap:12
+          }}>
             {[
               {label:"Total",val:filtered.length,pfx:"",sub:"transactions",col:"var(--ink)",bg:"var(--surface)"},
-              {label:"Total income",val:"₹"+fmt(totalCredit),pfx:"",sub:creditCount+" entries",col:"var(--green)",bg:"var(--gbg)"},
-              {label:"Total expenses",val:"₹"+fmt(totalDebit),pfx:"",sub:debitCount+" entries",col:"var(--red)",bg:"var(--rbg)"},
-              {label:"Net balance",val:(totalCredit>=totalDebit?"+":"-")+"₹"+fmt(Math.abs(totalCredit-totalDebit)),pfx:"",sub:totalCredit>=totalDebit?"More in 🎉":"More out ⚠️",col:totalCredit>=totalDebit?"var(--green)":"var(--red)",bg:totalCredit>=totalDebit?"var(--gbg)":"var(--rbg)"},
+              {label:"Total income",val:"₹"+fmt(filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0)),pfx:"",sub:filtered.filter(t=>t._type==="credit").length+" entries",col:"var(--green)",bg:"var(--gbg)"},
+              {label:"Total expenses",val:"₹"+fmt(filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0)),pfx:"",sub:filtered.filter(t=>t._type==="debit").length+" entries",col:"var(--red)",bg:"var(--rbg)"},
+              {label:"Net balance",val:(()=>{const c=filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);const d=filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0);return(c>=d?"+":"-")+"₹"+fmt(Math.abs(c-d));})(),pfx:"",sub:(()=>{const c=filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);const d=filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0);return c>=d?"More in 🎉":"More out ⚠️";})(),col:(()=>{const c=filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);const d=filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0);return c>=d?"var(--green)":"var(--red)";})(),bg:(()=>{const c=filtered.filter(t=>t._type==="credit").reduce((s,t)=>s+Math.abs(t.amount),0);const d=filtered.filter(t=>t._type==="debit").reduce((s,t)=>s+Math.abs(t.amount),0);return c>=d?"var(--gbg)":"var(--rbg)";})()},
             ].map(s=>(
               <div key={s.label} style={{background:s.bg,border:"1px solid var(--border)",borderRadius:10,padding:"12px 14px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:10,fontWeight:600,color:"var(--ink3)",marginBottom:5}}>{s.label}</div>
@@ -604,6 +836,12 @@ export default function Transactions() {
                 <div style={{fontSize:10,color:"var(--ink4)"}}>{s.sub}</div>
               </div>
             ))}
+          </div>
+          </div>
+
+          {/* Mobile Summary Banner (2×2 grid, clean) */}
+          <div className="mob-only" style={{flexDirection:"column"}}>
+            <SummaryBanner filtered={filtered}/>
           </div>
 
           {/* Desktop filter bar */}
@@ -674,7 +912,7 @@ export default function Transactions() {
                 <div key={`${t._type}-${t.id}-${i}`}
                   className={`txrow${isSelected?" selected":""}`}
                   onClick={()=>setSelected(isSelected?null:t)}
-                  style={{display:"grid",gridTemplateColumns:COLS,padding:"11px 20px",alignItems:"center",borderBottom:i<filtered.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${borderColor}`}}>
+                  style={{display:"grid",gridTemplateColumns:COLS,padding:"11px 20px",alignItems:"center",borderBottom:i<filtered.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${borderColor}`,cursor:"pointer"}}>
                   <div style={{width:34,height:34,borderRadius:8,background:accentBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>{CAT_EMOJI[category]||(isCredit?"💰":"💳")}</div>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{category}</div>
                   <div style={{fontSize:13,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
@@ -692,24 +930,43 @@ export default function Transactions() {
             })}
           </div>
 
-          {/* Mobile Cards */}
+          {/* ══ REDESIGNED Mobile Cards ══ */}
           <div className="mob-only" style={{flexDirection:"column",gap:8}}>
             {filtered.length===0?(
-              <div style={{background:"var(--surface)",borderRadius:14,padding:"48px 20px",textAlign:"center",border:"1px solid var(--border)"}}>
-                <div style={{fontSize:32,marginBottom:8}}>🔍</div>
-                <div style={{fontSize:14,fontWeight:600,color:"var(--ink2)",marginBottom:4}}>No transactions found</div>
-                {hasFilters&&<button onClick={clearFilters} style={{marginTop:12,padding:"8px 18px",borderRadius:8,background:"var(--accent)",border:"none",color:"#fff",fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Clear filters</button>}
+              <div style={{
+                background:"var(--surface)",borderRadius:16,
+                padding:"48px 20px",textAlign:"center",
+                border:"1px solid var(--border)"
+              }}>
+                <div style={{fontSize:36,marginBottom:10}}>🔍</div>
+                <div style={{fontSize:15,fontWeight:700,color:"var(--ink2)",marginBottom:6}}>No transactions found</div>
+                <div style={{fontSize:13,color:"var(--ink4)",marginBottom:16}}>Try adjusting your filters</div>
+                {hasFilters&&(
+                  <button onClick={clearFilters} style={{
+                    padding:"10px 22px",borderRadius:10,
+                    background:"var(--accent)",border:"none",
+                    color:"#fff",fontSize:13,cursor:"pointer",
+                    fontFamily:"inherit",fontWeight:700
+                  }}>Clear filters</button>
+                )}
               </div>
             ):filtered.map((t,i)=>(
               <MobileTxCard
                 key={`${t._type}-${t.id}-${i}`}
                 t={t}
+                animDelay={Math.min(i*30,200)}
                 onClick={()=>setSelected(selected?.id===t.id&&selected?._type===t._type?null:t)}
               />
             ))}
           </div>
 
-          <div style={{textAlign:"center",marginTop:12,fontSize:11,color:"var(--ink4)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,flexWrap:"wrap"}}>
+          {/* Live sync indicator */}
+          <div style={{
+            textAlign:"center",marginTop:16,
+            fontSize:11,color:"var(--ink4)",
+            display:"flex",alignItems:"center",
+            justifyContent:"center",gap:6
+          }}>
             <span className="pulse" style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"var(--green)"}}/>
             Auto-updates every 5 seconds
           </div>
