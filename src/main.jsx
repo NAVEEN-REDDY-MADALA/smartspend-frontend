@@ -1,7 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-
+// import "./Sidebar-patch.css";
+import "./index.css";       
+// import "./mobileFix.js"; 
+// import "./injectMobilePageCSS.js";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import AddIncome from "./pages/AddIncome.jsx";
@@ -11,11 +14,11 @@ import Transactions from "./pages/Transactions.jsx";
 import Analytics from "./pages/Analytics.jsx";
 import Goals from "./pages/Goals.jsx";
 import DetectedTransactions from "./pages/DetectedTransactions.jsx";
-
-
 import Reminders from "./pages/Reminders.jsx";
+import { injectMobileCSS } from "./pages/MobileLayout.jsx";
 
-// Add this route
+// Call injectMobileCSS to apply mobile styles
+injectMobileCSS();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <BrowserRouter>
@@ -26,14 +29,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <Route path="/add-expense" element={<AddExpense />} />
       <Route path="/budgets" element={<Budgets />} />
       <Route path="/transactions" element={<Transactions />} />
-      <Route path="/analytics" element={<Analytics/>}/>
+      <Route path="/analytics" element={<Analytics />} />
       <Route path="/goals" element={<Goals />} />
       <Route path="/detected-transactions" element={<DetectedTransactions />} />
       <Route path="/reminders" element={<Reminders />} />
-      
-
-
     </Routes>
   </BrowserRouter>
 );
-

@@ -1,146 +1,71 @@
-body {
-  font-family: "Segoe UI", Roboto, Arial;
-  background: #f4f6fc;
-  margin: 0;
-}
+/* 
+  sidebar-patch.css
+  Add this import to your main.jsx or index.css
+  This makes ALL desktop sidebars hide on mobile automatically
+*/
 
-/* Container */
-.container {
-  max-width: 1100px;
-  margin: 30px auto;
-  padding: 10px;
-}
-
-/* Header */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.header h2 {
-  color: #2c3e50;
-}
-
-.logout {
-  background: #ff4d4f;
-  border: none;
-  padding: 8px 14px;
-  color: white;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.logout:hover {
-  background: #e03132;
-}
-
-/* Cards */
-.card {
-  background: white;
-  padding: 15px;
-  border-radius: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-  margin-bottom: 15px;
-}
-
-/* Summary */
-.summary-box {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.summary-item {
-  background: #f0f3ff;
-  border-radius: 10px;
-  padding: 12px;
-  text-align: center;
-  font-size: 14px;
-}
-
-/* Grid Layout */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 15px;
-}
-
-/* Forms */
-input {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 8px;
-  border-radius: 8px;
-  border: 1px solid #dcdcdc;
-}
-
-button {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  background: #2f54eb;
-  color: white;
-}
-
-button:hover {
-  opacity: 0.9;
-}
-
-/* Lists */
-ul {
-  list-style: none;
-  padding: 0;
-}
-
-li {
-  background: #fafafa;
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-/* Action Buttons */
-.action-btn {
-  border: none;
-  padding: 6px 10px;
-  margin-left: 6px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.edit-btn {
-  background: #52c41a;
-  color: white;
-}
-
-.delete-btn {
-  background: #ff4d4f;
-  color: white;
-}
-
-/* Charts */
-.chart-box {
-  max-width: 600px;
-  margin: 0 auto;
-  height: 280px;
-}
-
-.card h3 {
-  margin-top: 0;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .grid {
-    grid-template-columns: 1fr;
+/* Hide all desktop sidebars on mobile */
+@media (max-width: 900px) {
+  aside {
+    display: none !important;
   }
 
-  .summary-box {
-    grid-template-columns: 1fr;
+  /* Make main content take full width */
+  div[style*="display:flex"] > div:first-child:not(aside) {
+    width: 100% !important;
+  }
+
+  /* Fix overflow on mobile */
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Add bottom padding to all scrollable content areas */
+  div[style*="overflow-y: auto"],
+  div[style*="overflowY: auto"],
+  div[style*="overflow-y:auto"] {
+    padding-bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Fix grid layouts that break on mobile */
+  div[style*="grid-template-columns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  div[style*="grid-template-columns: repeat(3"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Fix header padding on mobile */
+  div[style*="padding: 16px 28px"],
+  div[style*="padding:16px 28px"] {
+    padding: 12px 16px !important;
+  }
+
+  /* Fix content padding on mobile */
+  div[style*="padding: 24px 28px"],
+  div[style*="padding: 32px 28px"] {
+    padding: 12px 14px !important;
+  }
+
+  /* Fix font sizes on mobile */
+  div[style*="font-size: 20px"] {
+    font-size: 16px !important;
+  }
+
+  /* Fix button sizes on mobile */
+  button, a[style*="padding: 8px 16px"] {
+    min-height: 44px;
+  }
+}
+
+/* Show bottom nav only on mobile */
+nav.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  nav.bottom-nav {
+    display: flex !important;
   }
 }
