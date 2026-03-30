@@ -189,14 +189,15 @@ function looksLikeDebitMerchant(t) {
   return false;
 }
 
-function detectType(t,apiDefault) {
-  const tt=(t.transaction_type||t.type||"").toLowerCase();
-  if(tt==="debit"||tt==="expense") return "debit";
-  if(tt==="credit"||tt==="income") return "credit";
-  if(typeof t.amount==="number"&&t.amount<0) return "debit";
-  if(apiDefault==="credit"&&looksLikeDebitMerchant(t)) return "debit";
-  return apiDefault;
+function detectType(t, apiDefault) {
+  const tt = (t.transaction_type || t.type || "").toLowerCase();
+  if(tt === "debit" || tt === "expense") return "debit";
+  if(tt === "credit" || tt === "income") return "credit";
+  if(typeof t.amount === "number" && t.amount < 0) return "debit";
+  return apiDefault; // ✅ Trust the API, remove looksLikeDebitMerchant override
 }
+
+
 
 function resolveCategory(t) {
   const isCredit=t._type==="credit";
