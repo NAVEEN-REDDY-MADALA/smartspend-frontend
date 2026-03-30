@@ -371,14 +371,16 @@ function FilterSheet({category,setCategory,dateFrom,setDateFrom,dateTo,setDateTo
         </div>
       </div>
 
-      {/* Apply button — position:fixed, ALWAYS visible at screen bottom */}
+      {/* Apply button — fixed above the bottom nav, always visible */}
       <div style={{
-        position:"fixed",bottom:0,left:0,right:0,
+        position:"fixed",
+        bottom:"var(--nav-h, 64px)",
+        left:0,right:0,
         zIndex:202,
         padding:"12px 20px",
-        paddingBottom:"max(16px, env(safe-area-inset-bottom, 16px))",
         background:"var(--surface)",
         borderTop:"1px solid var(--border)",
+        boxShadow:"0 -4px 20px rgba(0,0,0,.06)"
       }}>
         <button onClick={onClose} style={{
           width:"100%",padding:"15px",borderRadius:13,

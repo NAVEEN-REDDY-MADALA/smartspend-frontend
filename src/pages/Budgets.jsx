@@ -117,8 +117,6 @@ function BudgetCardMobile({b,used,onDelete}) {
   const over=pct>=90;
   const warn=pct>=70&&pct<90;
   const color=over?"var(--red)":warn?"var(--amber)":"var(--accent)";
-  const bg=over?"var(--rbg)":warn?"var(--abg)":"var(--gbg)";
-  const bdr=over?"var(--rborder)":warn?"var(--aborder)":"var(--gborder)";
 
   return (
     <div className="fade" style={{background:"var(--surface)",borderRadius:14,padding:"14px",border:"1px solid var(--border)",borderLeft:`4px solid ${color}`,boxShadow:"0 1px 6px rgba(0,0,0,.04)",marginBottom:10}}>
@@ -134,10 +132,7 @@ function BudgetCardMobile({b,used,onDelete}) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
         </button>
       </div>
-
-      {/* Progress bar */}
       <ProgressBar pct={pct}/>
-
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginTop:4}}>
         <div style={{textAlign:"center",padding:"6px 4px",background:"#f9fafb",borderRadius:7}}>
           <div style={{fontSize:10,color:"var(--ink4)",marginBottom:1}}>Limit</div>
@@ -161,6 +156,8 @@ function AddBudgetSheet({onClose,onSave,budgets,message}) {
   const CATEGORIES=["Food","Bills","Shopping","Entertainment","Travel","Medicine","Groceries","Other"];
   const [category,setCategory]=useState("");
   const [limit,setLimit]=useState("");
+  // NAV_H + some breathing room so button clears the bottom nav
+  const BTN_ZONE = 80 + 64; // button area + nav height
 
   function submit(e) {
     e.preventDefault();
@@ -170,32 +167,82 @@ function AddBudgetSheet({onClose,onSave,budgets,message}) {
 
   return (
     <>
-      <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",zIndex:200}}/>
-      <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:201,background:"var(--surface)",borderRadius:"20px 20px 0 0",paddingBottom:"env(safe-area-inset-bottom,16px)",animation:"slideUp .3s ease"}}>
-        <div style={{width:36,height:4,background:"var(--border)",borderRadius:99,margin:"10px auto 0"}}/>
-        <div style={{padding:"16px 20px"}}>
-          <div style={{fontSize:16,fontWeight:700,color:"var(--ink)",marginBottom:16}}>+ Set a spending limit</div>
-          <form onSubmit={submit}>
-            <div style={{marginBottom:13}}>
-              <label style={{fontSize:12,fontWeight:500,color:"var(--ink2)",display:"block",marginBottom:5}}>What category? *</label>
-              <select required value={category} onChange={e=>setCategory(e.target.value)} className="inp">
-                <option value="">Pick a category…</option>
-                {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div style={{marginBottom:16}}>
-              <label style={{fontSize:12,fontWeight:500,color:"var(--ink2)",display:"block",marginBottom:5}}>Max I want to spend (₹) *</label>
-              <input type="number" required min="1" placeholder="e.g. 2000" value={limit} onChange={e=>setLimit(e.target.value)} className="inp"/>
-              <div style={{fontSize:11,color:"var(--ink3)",marginTop:4}}>This is your limit for the whole month</div>
-            </div>
-            {message&&(
-              <div style={{marginBottom:12,padding:"10px 13px",borderRadius:7,fontSize:12,background:message.ok?"var(--gbg)":"var(--rbg)",color:message.ok?"var(--green)":"var(--red)",border:`1px solid ${message.ok?"#bbf7d0":"#fecaca"}`}}>
-                {message.text}
-              </div>
-            )}
-            <button type="submit" style={{width:"100%",padding:"12px",borderRadius:10,background:"var(--accent)",border:"none",color:"#fff",fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Save Budget</button>
-          </form>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:200,backdropFilter:"blur(2px)"}}/>
+
+      {/* Scrollable sheet — padded at bottom so content clears the fixed button */}
+      <div style={{
+        position:"fixed",bottom:0,left:0,right:0,zIndex:201,
+        background:"var(--surface)",borderRadius:"22px 22px 0 0",
+        maxHeight:"82vh",overflowY:"auto",
+        animation:"slideUp .3s cubic-bezier(.34,1.1,.64,1) both",
+        paddingBottom: BTN_ZONE
+      }}>
+        <div style={{width:36,height:4,background:"var(--border)",borderRadius:99,margin:"12px auto 0"}}/>
+
+        {/* Header — sticky inside the sheet */}
+        <div style={{
+          position:"sticky",top:0,background:"var(--surface)",zIndex:1,
+          padding:"14px 20px 12px",
+          borderBottom:"1px solid var(--border)",
+          display:"flex",justifyContent:"space-between",alignItems:"center"
+        }}>
+          <div style={{fontSize:16,fontWeight:700,color:"var(--ink)"}}>Set a spending limit</div>
+          <button onClick={onClose} style={{width:30,height:30,borderRadius:99,border:"1px solid var(--border)",background:"var(--bg)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Icon d={ICONS.x} size={13} color="var(--ink3)"/>
+          </button>
         </div>
+
+        {/* Form content */}
+        <div style={{padding:"20px 20px 8px"}}>
+          <div style={{marginBottom:16}}>
+            <label style={{fontSize:12,fontWeight:600,color:"var(--ink2)",display:"block",marginBottom:6}}>Category *</label>
+            <select value={category} onChange={e=>setCategory(e.target.value)} className="inp" style={{padding:"12px 13px"}}>
+              <option value="">Pick a category…</option>
+              {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:12,fontWeight:600,color:"var(--ink2)",display:"block",marginBottom:6}}>Monthly limit (₹) *</label>
+            <input
+              type="number" min="1" placeholder="e.g. 2000"
+              value={limit} onChange={e=>setLimit(e.target.value)}
+              className="inp" style={{padding:"12px 13px"}}
+            />
+            <div style={{fontSize:11,color:"var(--ink3)",marginTop:5}}>This is your spending cap for the whole month</div>
+          </div>
+          {message&&(
+            <div style={{marginTop:14,padding:"10px 13px",borderRadius:9,fontSize:12,background:message.ok?"var(--gbg)":"var(--rbg)",color:message.ok?"var(--green)":"var(--red)",border:`1px solid ${message.ok?"#bbf7d0":"#fecaca"}`}}>
+              {message.text}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Save button — position:fixed, always above nav, never hidden */}
+      <div style={{
+        position:"fixed",
+        bottom:"var(--nav-h, 64px)",   /* sits on top of bottom nav */
+        left:0,right:0,
+        zIndex:202,
+        padding:"12px 20px",
+        background:"var(--surface)",
+        borderTop:"1px solid var(--border)",
+        boxShadow:"0 -4px 20px rgba(0,0,0,.06)"
+      }}>
+        <button
+          onClick={submit}
+          disabled={!category||!limit}
+          style={{
+            width:"100%",padding:"15px",borderRadius:13,
+            background:(!category||!limit)?"var(--border)":"linear-gradient(135deg,#7c5cbf,#a78bfa)",
+            border:"none",color:(!category||!limit)?"var(--ink4)":"#fff",
+            fontSize:15,fontWeight:700,cursor:(!category||!limit)?"not-allowed":"pointer",
+            fontFamily:"inherit",transition:"all .2s",
+            boxShadow:(!category||!limit)?"none":"0 4px 16px rgba(124,92,191,.35)"
+          }}>
+          {(!category||!limit)?"Fill in the fields above ↑":"💾 Save Budget"}
+        </button>
       </div>
     </>
   );
@@ -289,7 +336,7 @@ export default function Budgets() {
       {showAddSheet&&(
         <AddBudgetSheet
           onClose={()=>{setShowAddSheet(false);setMessage(null);}}
-          onSave={(cat,lim)=>{saveBudget(cat,lim);setShowAddSheet(false);}}
+          onSave={(cat,lim)=>{saveBudget(cat,lim);}}
           budgets={budgets}
           message={message}
         />
@@ -328,7 +375,7 @@ export default function Budgets() {
               </div>
             </div>
 
-            {/* AI risk alerts for mobile */}
+            {/* AI risk alerts */}
             {budgetRisks.filter(r=>budgets.find(b=>b.category===r.category)&&r.risk_level==="HIGH").length>0&&(
               <div className="fade" style={{background:"var(--rbg)",border:"1px solid var(--rborder)",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
                 <div style={{fontSize:12,fontWeight:700,color:"var(--red)",marginBottom:8}}>🤖 AI Risk Alerts</div>
@@ -383,7 +430,6 @@ export default function Budgets() {
 
             {/* Right column */}
             <div style={{display:"flex",flexDirection:"column",gap:16}}>
-              {/* AI Risk */}
               {budgetRisks.filter(r=>budgets.find(b=>b.category===r.category)).length>0&&(
                 <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                   <div style={{padding:"14px 20px",borderBottom:"1px solid var(--border)",fontWeight:600,fontSize:13,color:"var(--ink)"}}>🤖 AI is predicting — will you go over budget?</div>
@@ -410,7 +456,6 @@ export default function Budgets() {
                 </div>
               )}
 
-              {/* Active budgets table */}
               <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{padding:"14px 20px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{fontWeight:600,fontSize:13,color:"var(--ink)"}}>Active budgets for {monthLabel}</div>
