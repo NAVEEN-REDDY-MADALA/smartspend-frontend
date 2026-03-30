@@ -168,9 +168,9 @@ function MobileDashHeader({pendingCount,onLogout}) {
                   <a href="/add-expense" style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",textDecoration:"none",color:"var(--ink2)",fontSize:13,fontWeight:500,borderBottom:"1px solid var(--border)"}}>
                     <span style={{fontSize:16}}>💸</span> Add Expense
                   </a>
-                  <a href="/transactions" style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",textDecoration:"none",color:"var(--ink2)",fontSize:13,fontWeight:500,borderBottom:"1px solid var(--border)"}}>
+                  {/* <a href="/transactions" style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",textDecoration:"none",color:"var(--ink2)",fontSize:13,fontWeight:500,borderBottom:"1px solid var(--border)"}}>
                     <span style={{fontSize:16}}>📋</span> All Transactions
-                  </a>
+                  </a> */}
                   <button onClick={()=>{setMenuOpen(false);onLogout();}}
                     style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:"none",border:"none",color:"var(--red)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
                     <Icon d={ICONS.logout} size={14} color="var(--red)"/> Sign Out
