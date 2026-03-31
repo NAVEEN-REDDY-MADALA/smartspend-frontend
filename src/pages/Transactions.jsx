@@ -202,6 +202,7 @@ function detectType(t, apiDefault) {
 function resolveCategory(t) {
   const isCredit=t._type==="credit";
   if(isCredit){
+    // ✅ Trust API category first
     const stored=t.category||t.category_guess||"";
     const validCreditCats=["Income","Transfer","Refund","Cashback","Salary"];
     if(stored&&validCreditCats.includes(stored)) return stored;
@@ -211,19 +212,19 @@ function resolveCategory(t) {
     if(src==="Cashback") return "Cashback";
     if(src==="UPI Received") return "Transfer";
     if(src==="Transfer") return "Transfer";
-    const merch=(t.merchant||t.merchant_name||t.source||"").toUpperCase();
-    if(merch.includes("TRANSFER")||merch.includes("NEFT")||merch.includes("IMPS")||merch.includes("RTGS")) return "Transfer";
+    // Keyword fallback only on description, NOT merchant name
     const desc=(t.description||"").toLowerCase();
     if(desc.includes("salary")||desc.includes("stipend")) return "Salary";
     if(desc.includes("refund")||desc.includes("reversal")) return "Refund";
     if(desc.includes("cashback")) return "Cashback";
-    if(desc.includes("transfer")) return "Transfer";
     return "Income";
   }
+  // ✅ For debits: trust API category completely
   const cat=t.category||t.category_guess||"";
   if(cat) return cat;
-  const merch=(t.merchant||t.merchant_name||"").toUpperCase();
-  if(merch.includes("TRANSFER")||merch.includes("NEFT")||merch.includes("IMPS")||merch.includes("RTGS")) return "Transfer";
+  // Only fall back to keyword matching if NO category from API at all
+  const desc=(t.description||"").toLowerCase();
+  if(desc.includes("transfer")&&desc.includes("sent")) return "Transfer";
   return "Other";
 }
 
