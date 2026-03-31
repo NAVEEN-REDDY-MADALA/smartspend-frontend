@@ -459,7 +459,7 @@ function MobileTxCard({t,onClick,animDelay=0}) {
               {datePart}
             </span>
             {timePart&&(
-  <span style={{fontSize:6,color:"var(--ink4)",whiteSpace:"nowrap"}}>{timePart}</span>
+  <span style={{fontSize:8,color:"var(--ink4)",whiteSpace:"nowrap"}}>{timePart}</span>
 )}
           </div>
           {/* Right: type + source badges */}
