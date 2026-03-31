@@ -128,7 +128,7 @@ const NAV_SECTIONS=[
     {to:"/budgets",label:"My Budgets",icon:"budget"},
   ]},
   {label:"Auto Features",items:[
-    {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
+    // {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
   ]},
   {label:"Account",items:[{to:"/settings",label:"Settings",icon:"home"}]},
@@ -442,8 +442,7 @@ function MobileTxCard({t,onClick,animDelay=0}) {
         {/* Merchant name */}
         <div style={{
           fontSize:12,color:"var(--ink3)",
-          overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
-          marginBottom:6,fontWeight:500
+        whiteSpace:"normal",wordBreak:"break-word",marginBottom:6,fontWeight:500
         }}>
           {merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>No merchant</span>}
         </div>
@@ -460,8 +459,8 @@ function MobileTxCard({t,onClick,animDelay=0}) {
               {datePart}
             </span>
             {timePart&&(
-              <span style={{fontSize:10,color:"var(--ink4)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{timePart}</span>
-            )}
+  <span style={{fontSize:10,color:"var(--ink4)",whiteSpace:"nowrap"}}>{timePart}</span>
+)}
           </div>
           {/* Right: type + source badges */}
           <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>

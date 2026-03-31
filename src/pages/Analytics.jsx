@@ -82,7 +82,7 @@ const NAV_SECTIONS=[
     {to:"/budgets",label:"My Budgets",icon:"budget"},
   ]},
   {label:"Auto Features",items:[
-    {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
+    // {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
   ]},
   {label:"Account",items:[{to:"/settings",label:"Settings",icon:"home"}]},

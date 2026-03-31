@@ -93,7 +93,9 @@ function injectCSS() {
 const NAV_SECTIONS = [
   { label: null, items: [{ to: "/dashboard", label: "Home", icon: "home" }] },
   { label: "Track Money", items: [{ to: "/transactions", label: "Transactions", icon: "tx" }, { to: "/analytics", label: "Analytics", icon: "analytics" }, { to: "/goals", label: "My Goals", icon: "goals" }, { to: "/budgets", label: "My Budgets", icon: "budget" }] },
-  { label: "Auto Features", items: [{ to: "/detected-transactions", label: "SMS Detected", icon: "detect" }, { to: "/reminders", label: "Reminders", icon: "reminder" }] },
+  { label: "Auto Features", items: [
+    // { to: "/detected-transactions", label: "SMS Detected", icon: "detect" },
+     { to: "/reminders", label: "Reminders", icon: "reminder" }] },
   { label: "Account", items: [{ to: "/settings", label: "Settings", icon: "home" }] },
 ];
 

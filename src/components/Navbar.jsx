@@ -42,10 +42,10 @@ export default function Navbar() {
             {/* <span style={navLinkIcon}>📈</span> */}
             {/* <span>Analytics</span> */}
           </Link>
-          <Link to="/detected-transactions" style={navLink}>
+          {/* <Link to="/detected-transactions" style={navLink}>
             <span style={navLinkIcon}>🔍</span>
             <span>Detected</span>
-          </Link>
+          </Link> */}
           
         </div>
 
