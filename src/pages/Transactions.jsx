@@ -452,14 +452,14 @@ function MobileTxCard({t,onClick,animDelay=0}) {
           {/* Left: date + time */}
           <div style={{display:"flex",alignItems:"center",gap:5,minWidth:0}}>
             <span style={{
-              fontSize:10,color:"var(--ink4)",fontWeight:500,
+              fontSize:6,color:"var(--ink4)",fontWeight:500,
               background:"var(--bg)",padding:"2px 7px",borderRadius:99,
               border:"1px solid var(--border)",flexShrink:0
             }}>
               {datePart}
             </span>
             {timePart&&(
-  <span style={{fontSize:10,color:"var(--ink4)",whiteSpace:"nowrap"}}>{timePart}</span>
+  <span style={{fontSize:6,color:"var(--ink4)",whiteSpace:"nowrap"}}>{timePart}</span>
 )}
           </div>
           {/* Right: type + source badges */}
