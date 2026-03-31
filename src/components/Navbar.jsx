@@ -46,6 +46,7 @@ export default function Navbar() {
             <span style={navLinkIcon}>🔍</span>
             <span>Detected</span>
           </Link>
+          
         </div>
 
         {/* Right Section */}

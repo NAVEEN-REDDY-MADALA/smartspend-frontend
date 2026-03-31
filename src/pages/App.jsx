@@ -14,6 +14,8 @@ import AddIncome from "./AddIncome";
 import AddExpense from "./AddExpense";
 import DetectedTransactions from "./DetectedTransactions";
 import Analytics from "./Analytics";
+// import settings from "./pages/Settings";
+import Settings from "./pages/Settings";
 
 // Global responsive CSS — hides desktop sidebar on mobile, shows bottom nav
 const GLOBAL_RESPONSIVE_CSS = `
@@ -68,6 +70,7 @@ function AppInner() {
         <Route path="/add-expense"             element={<AddExpense />} />
         <Route path="/detected-transactions"   element={<DetectedTransactions />} />
         <Route path="/analytics"               element={<Analytics />} />
+        <Route path="/settings"                element={<Settings />} />
       </Routes>
 
       {/* Bottom nav shown on all pages except login */}

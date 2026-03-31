@@ -77,7 +77,6 @@ function injectCSS() {
   document.head.appendChild(s);
   injectMobileCSS();
 }
-
 const NAV_SECTIONS=[
   {label:null,items:[{to:"/dashboard",label:"Home",icon:"home"}]},
   {label:"Track Money",items:[
@@ -89,6 +88,10 @@ const NAV_SECTIONS=[
   {label:"Auto Features",items:[
     {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
+  ]},
+  // ✅ ADD THIS
+  {label:"Account",items:[
+    {to:"/settings",label:"Settings",icon:"home"},
   ]},
 ];
 

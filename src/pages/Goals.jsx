@@ -4,6 +4,7 @@ import {
   injectMobileCSS, fmt,
   Icon, ICONS, BottomNav, MobileHeader, LoadingScreen
 } from "./MobileLayout";
+import Settings from "./Settings";
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@600;700;800&display=swap');
@@ -73,6 +74,7 @@ const NAV_SECTIONS=[
     {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
   ]},
+  {label:"Account",items:[{to:"/settings",label:"Settings",icon:"home"}]},
 ];
 
 function Sidebar({onLogout}) {

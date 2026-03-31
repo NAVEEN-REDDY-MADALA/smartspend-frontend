@@ -15,6 +15,7 @@ import Analytics from "./pages/Analytics.jsx";
 import Goals from "./pages/Goals.jsx";
 import DetectedTransactions from "./pages/DetectedTransactions.jsx";
 import Reminders from "./pages/Reminders.jsx";
+import Settings from "./pages/Settings.jsx";
 import { injectMobileCSS } from "./pages/MobileLayout.jsx";
 
 // Call injectMobileCSS to apply mobile styles
@@ -33,6 +34,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <Route path="/goals" element={<Goals />} />
       <Route path="/detected-transactions" element={<DetectedTransactions />} />
       <Route path="/reminders" element={<Reminders />} />
+      {/* <Route path="/settings" element={<Settings />} />  */}
+      <Route path="/settings" element={<Settings />} />
     </Routes>
   </BrowserRouter>
 );

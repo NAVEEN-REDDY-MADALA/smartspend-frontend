@@ -367,6 +367,8 @@ const NAV_ITEMS = [
   { to: "/goals",                 label: "Goals",     icon: "goals"    },
   { to: "/detected-transactions", label: "SMS",       icon: "detect"   },
   { to: "/reminders",             label: "Reminders", icon: "reminder" },
+  // { to: "/settings",              label: "Settings",  icon: "home" }
+  { to: "/Settings", label: "Settings", icon: "home" }
 ];
 
 // ── Bottom Navigation — dark purple + SVG icons, matches screenshot ───────────
