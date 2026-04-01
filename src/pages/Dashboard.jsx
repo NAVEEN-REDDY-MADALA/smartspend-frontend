@@ -40,11 +40,7 @@ const CSS = `
   .txrow:hover{background:var(--bg)!important;}
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;}
   .pulse{animation:pulse 2s infinite;}
-
-  /* Sidebar (desktop) */
   .sidebar{width:210px;flex-shrink:0;background:var(--sb);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow:hidden;}
-
-  /* month select */
   .month-select{border:1.5px solid var(--accent);background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;padding:7px 36px 7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237c5cbf' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;min-width:180px;}
 
   @media(max-width:900px){
@@ -56,7 +52,6 @@ const CSS = `
     .stats-grid{grid-template-columns:1fr 1fr!important;gap:8px!important;}
     .main-grid{grid-template-columns:1fr!important;}
     .month-select{min-width:0;font-size:12px;}
-    /* Transaction row responsive */
     .tx-desk-row{display:none!important;}
     .tx-mob-row{display:flex!important;}
   }
@@ -65,7 +60,6 @@ const CSS = `
     .desk-hdr{display:flex!important;}
     .desk-only{display:grid!important;}
     .desk-only-block{display:block!important;}
-    /* Transaction row responsive */
     .tx-desk-row{display:grid!important;}
     .tx-mob-row{display:none!important;}
   }
@@ -77,6 +71,7 @@ function injectCSS() {
   document.head.appendChild(s);
   injectMobileCSS();
 }
+
 const NAV_SECTIONS=[
   {label:null,items:[{to:"/dashboard",label:"Home",icon:"home"}]},
   {label:"Track Money",items:[
@@ -86,10 +81,9 @@ const NAV_SECTIONS=[
     {to:"/budgets",label:"My Budgets",icon:"budget"},
   ]},
   {label:"Auto Features",items:[
-    // {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
+    {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
   ]},
-  // ✅ ADD THIS
   {label:"Account",items:[
     {to:"/settings",label:"Settings",icon:"home"},
   ]},
@@ -126,12 +120,10 @@ function Sidebar({onLogout,pendingCount}) {
   );
 }
 
-/* ─── Mobile Header with logout dropdown ─────────────────────────────────── */
 function MobileDashHeader({pendingCount,onLogout}) {
   const [menuOpen,setMenuOpen]=useState(false);
   const now=new Date();
   const greeting=now.getHours()<12?"Good morning ☀️":now.getHours()<17?"Good afternoon 👋":"Good evening 🌙";
-
   return (
     <div style={{background:"var(--sb)",padding:"14px 16px 12px",position:"sticky",top:0,zIndex:100,borderBottom:"1px solid rgba(255,255,255,.08)",flexShrink:0}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -142,8 +134,6 @@ function MobileDashHeader({pendingCount,onLogout}) {
             <div style={{fontSize:11,color:"rgba(255,255,255,.5)",marginTop:2}}>SmartSpend</div>
           </div>
         </div>
-
-        {/* Right side: pending badge + menu */}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {pendingCount>0&&(
             <a href="/detected-transactions" style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:99,background:"rgba(239,68,68,.25)",border:"1px solid rgba(239,68,68,.4)",textDecoration:"none"}}>
@@ -151,8 +141,6 @@ function MobileDashHeader({pendingCount,onLogout}) {
               <span style={{fontSize:11,fontWeight:700,color:"#fca5a5"}}>{pendingCount} SMS</span>
             </a>
           )}
-
-          {/* Menu button */}
           <div style={{position:"relative"}}>
             <button onClick={()=>setMenuOpen(o=>!o)}
               style={{width:34,height:34,borderRadius:9,border:"1px solid rgba(255,255,255,.25)",background:"rgba(255,255,255,.12)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexDirection:"column",gap:3}}>
@@ -160,7 +148,6 @@ function MobileDashHeader({pendingCount,onLogout}) {
               <span style={{width:14,height:1.5,background:"rgba(255,255,255,.8)",borderRadius:99,display:"block"}}/>
               <span style={{width:14,height:1.5,background:"rgba(255,255,255,.8)",borderRadius:99,display:"block"}}/>
             </button>
-
             {menuOpen&&(
               <>
                 <div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,zIndex:199}}/>
@@ -171,9 +158,6 @@ function MobileDashHeader({pendingCount,onLogout}) {
                   <a href="/add-expense" style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",textDecoration:"none",color:"var(--ink2)",fontSize:13,fontWeight:500,borderBottom:"1px solid var(--border)"}}>
                     <span style={{fontSize:16}}>💸</span> Add Expense
                   </a>
-                  {/* <a href="/transactions" style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",textDecoration:"none",color:"var(--ink2)",fontSize:13,fontWeight:500,borderBottom:"1px solid var(--border)"}}>
-                    <span style={{fontSize:16}}>📋</span> All Transactions
-                  </a> */}
                   <button onClick={()=>{setMenuOpen(false);onLogout();}}
                     style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:"none",border:"none",color:"var(--red)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
                     <Icon d={ICONS.logout} size={14} color="var(--red)"/> Sign Out
@@ -188,7 +172,6 @@ function MobileDashHeader({pendingCount,onLogout}) {
   );
 }
 
-/* ─── Month Selector ─────────────────────────────────────────────────────── */
 const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function buildMonthList(expenses,incomes) {
@@ -217,17 +200,21 @@ function MonthSelector({months,selected,onChange}) {
   );
 }
 
-/* ─── Stat Card ──────────────────────────────────────────────────────────── */
-function StatCard({label,value,prefix="₹",sub,change,icon,iconBg,ani}) {
+function StatCard({label,value,prefix="₹",sub,change,icon,iconBg,ani,highlight,highlightNeg}) {
   const pos=change>=0;
   return (
-    <div className={`statcard ${ani}`} style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"14px 16px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+    <div className={`statcard ${ani}`} style={{
+      background:highlight?"linear-gradient(135deg,#ecfdf5,#f0fdf4)":highlightNeg?"var(--rbg)":"var(--surface)",
+      border:highlight?"1.5px solid var(--gborder)":highlightNeg?"1.5px solid var(--rborder)":"1px solid var(--border)",
+      borderRadius:10,padding:"14px 16px",
+      boxShadow:highlight?"0 2px 8px rgba(5,150,105,.1)":"0 1px 4px rgba(0,0,0,.04)"
+    }}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
         <div style={{fontSize:11,fontWeight:500,color:"var(--ink3)",lineHeight:1.4}}>{label}</div>
         <div style={{width:30,height:30,borderRadius:8,background:iconBg||"#f3f4f6",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{icon}</div>
       </div>
-      <div style={{fontSize:20,fontWeight:700,color:"var(--ink)",lineHeight:1,marginBottom:5}}>{prefix}{fmt(value)}</div>
-      {sub&&<div style={{fontSize:11,color:"var(--ink4)"}}>{sub}</div>}
+      <div style={{fontSize:20,fontWeight:700,color:highlight?"var(--green)":highlightNeg?"var(--red)":"var(--ink)",lineHeight:1,marginBottom:5}}>{prefix}{fmt(value)}</div>
+      {sub&&<div style={{fontSize:11,color:highlight?"var(--green)":highlightNeg?"var(--red)":"var(--ink4)"}}>{sub}</div>}
       {change!==undefined&&(
         <div style={{display:"inline-flex",alignItems:"center",gap:3,marginTop:6,fontSize:11,fontWeight:500,color:pos?"var(--green)":"var(--red)"}}>
           {pos?"↑":"↓"}{Math.abs(change).toFixed(1)}% vs prev month
@@ -237,7 +224,71 @@ function StatCard({label,value,prefix="₹",sub,change,icon,iconBg,ani}) {
   );
 }
 
-/* ─── helpers ─────────────────────────────────────────────────────────────── */
+/* ─── Carry Forward Banner ───────────────────────────────────────────────── */
+function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBalance,savings,realAvailable}) {
+  if(selectedMonth==="all") return null;
+  const cfPositive=carryForward>=0;
+  const realPositive=realAvailable>=0;
+
+  return (
+    <div style={{marginBottom:14}}>
+      {/* Main banner */}
+      <div style={{
+        display:"flex",alignItems:"center",gap:12,
+        padding:"12px 14px",borderRadius:12,
+        background:cfPositive?"linear-gradient(135deg,#ecfdf5,#f0fdf4)":"linear-gradient(135deg,#fff1f2,#fef2f2)",
+        border:`1.5px solid ${cfPositive?"var(--gborder)":"var(--rborder)"}`,
+        marginBottom:8
+      }}>
+        <div style={{fontSize:24}}>💼</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:12,fontWeight:700,color:cfPositive?"var(--green)":"var(--red)",marginBottom:2}}>
+            Carried forward from {prevMonthLabel||"previous months"}
+          </div>
+          <div style={{fontSize:11,color:"var(--ink4)"}}>
+            Your savings from before {selectedMonth.split("-")[0]+"-"+MONTHS[+selectedMonth.split("-")[1]-1]} are added to this month
+          </div>
+        </div>
+        <div style={{
+          fontSize:20,fontWeight:800,
+          color:cfPositive?"var(--green)":"var(--red)",
+          fontFamily:"'Sora',sans-serif",flexShrink:0
+        }}>
+          {cfPositive?"+":""}{carryForward<0?"-₹":"₹"}{fmt(Math.abs(carryForward))}
+        </div>
+      </div>
+
+      {/* Formula row */}
+      <div style={{
+        display:"flex",alignItems:"center",gap:6,
+        padding:"10px 14px",borderRadius:10,
+        background:"var(--surface)",border:"1px solid var(--border)",
+        flexWrap:"wrap"
+      }}>
+        <span style={{fontSize:11,fontWeight:600,color:"var(--ink3)"}}>💼 ₹{fmt(Math.abs(carryForward))}</span>
+        <span style={{fontSize:11,color:"var(--ink4)"}}>carried</span>
+        <span style={{fontSize:13,color:"var(--ink4)"}}>+</span>
+        <span style={{fontSize:11,fontWeight:600,color:"var(--green)"}}>💰 ₹{fmt(Math.max(savings,0))}</span>
+        <span style={{fontSize:11,color:"var(--ink4)"}}>this month net</span>
+        <span style={{fontSize:13,color:"var(--ink4)"}}>=</span>
+        <span style={{
+          fontSize:13,fontWeight:800,
+          color:realPositive?"var(--green)":"var(--red)",
+          fontFamily:"'Sora',sans-serif",
+          background:realPositive?"var(--gbg)":"var(--rbg)",
+          border:`1px solid ${realPositive?"var(--gborder)":"var(--rborder)"}`,
+          padding:"2px 10px",borderRadius:99
+        }}>
+          {realPositive?"₹":"-₹"}{fmt(Math.abs(realAvailable))} available
+        </span>
+        <span style={{fontSize:10,color:"var(--ink4)",marginLeft:"auto"}}>
+          🏦 All-time: {allTimeBalance>=0?"₹":"-₹"}{fmt(Math.abs(allTimeBalance))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 const CAT_EMOJI={Food:"🍜",Transport:"🚗",Shopping:"🛍️",Entertainment:"🎬",Health:"💊",Utilities:"⚡",Groceries:"🛒",Coffee:"☕",Books:"📚",Bills:"💡",Travel:"✈️",Medicine:"💊",Income:"💰",Salary:"💼",Refund:"↩️",Cashback:"🎁",Transfer:"🔁",Finance:"💳",Education:"📚",Other:"💳"};
 const BAR_COLORS=["#7c5cbf","#a78bfa","#60a5fa","#34d399","#fb923c"];
 const isAutoTx=t=>t.is_auto===true||t.is_auto===1||t.is_auto==="true"||t.is_auto==="1";
@@ -331,12 +382,39 @@ export default function Dashboard() {
   const totalIncome=useMemo(()=>filteredIncomes.reduce((s,e)=>s+e.amount,0),[filteredIncomes]);
   const savings=totalIncome-totalExpense;
 
+  // ── All-time totals ───────────────────────────────────────────────────────
+  const allTimeIncome=useMemo(()=>allIncomes.reduce((s,e)=>s+e.amount,0),[allIncomes]);
+  const allTimeExpense=useMemo(()=>allExpenses.reduce((s,e)=>s+e.amount,0),[allExpenses]);
+  const allTimeBalance=allTimeIncome-allTimeExpense;
+
+  // ── Previous month ────────────────────────────────────────────────────────
   const prevMonthKey=useMemo(()=>{
     if(selectedMonth==="all") return null;
     const[y,mo]=selectedMonth.split("-").map(Number);
     const prev=new Date(y,mo-2,1);
     return `${prev.getFullYear()}-${String(prev.getMonth()+1).padStart(2,"0")}`;
   },[selectedMonth]);
+
+  const prevMonthLabel=useMemo(()=>{
+    if(!prevMonthKey) return "";
+    const[y,mo]=prevMonthKey.split("-");
+    return `${MONTHS[+mo-1]} ${y}`;
+  },[prevMonthKey]);
+
+  // ── Carry Forward = cumulative balance BEFORE selected month ──────────────
+  const carryForward=useMemo(()=>{
+    if(selectedMonth==="all") return 0;
+    const incBefore=allIncomes
+      .filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)<selectedMonth;})
+      .reduce((s,e)=>s+e.amount,0);
+    const expBefore=allExpenses
+      .filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)<selectedMonth;})
+      .reduce((s,e)=>s+e.amount,0);
+    return incBefore-expBefore;
+  },[allIncomes,allExpenses,selectedMonth]);
+
+  // ── Real available = carry forward + this month net ───────────────────────
+  const realAvailable=carryForward+savings;
 
   const prevExpense=useMemo(()=>{
     if(!prevMonthKey) return null;
@@ -355,7 +433,6 @@ export default function Dashboard() {
   filteredExpenses.forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});
   const topCats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
-  const budgets=JSON.parse(localStorage.getItem("budgets")||"[]");
   const monthLabel=useMemo(()=>{
     if(selectedMonth==="all") return "All Time";
     const[y,mo]=selectedMonth.split("-");
@@ -388,12 +465,10 @@ export default function Dashboard() {
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
-        {/* ── Mobile Header ── */}
         <div className="mob-only" style={{flexDirection:"column"}}>
           <MobileDashHeader pendingCount={pendingCount} onLogout={logout}/>
         </div>
 
-        {/* ── Desktop Header ── */}
         <div className="desk-hdr" style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"16px 28px",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"var(--ink)"}}>
@@ -407,10 +482,8 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Month Selector */}
         <MonthSelector months={monthList} selected={selectedMonth} onChange={setSelectedMonth}/>
 
-        {/* Pending SMS alert (desktop only style — mobile shows in header) */}
         {pendingCount>0&&(
           <div className="desk-hdr" style={{background:"#eff6ff",borderBottom:"1px solid #bfdbfe",padding:"10px 28px",justifyContent:"space-between",alignItems:"center"}}>
             <div style={{display:"flex",alignItems:"center",gap:8,fontSize:13,color:"var(--blue)"}}>
@@ -421,14 +494,35 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Page content ── */}
         <div className="dash-content" style={{flex:1,overflowY:"auto",padding:"16px 16px 28px",background:"var(--bg)"}}>
+
+          {/* ── Carry Forward Banner ── */}
+          <CarryForwardBanner
+            carryForward={carryForward}
+            prevMonthLabel={prevMonthLabel}
+            selectedMonth={selectedMonth}
+            allTimeBalance={allTimeBalance}
+            savings={savings}
+            realAvailable={realAvailable}
+          />
 
           {/* Stats grid */}
           <div className="stats-grid fade" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
             <StatCard label={`Money received — ${monthLabel}`} value={totalIncome} icon="💰" iconBg="#ecfdf5" change={incomeChange} ani="f1"/>
             <StatCard label={`Money spent — ${monthLabel}`} value={totalExpense} icon="💸" iconBg="#faf5ff" change={expenseChange} ani="f2"/>
-            <StatCard label="Money left to spend" value={Math.abs(savings)} prefix={savings<0?"-₹":"₹"} sub={savings>=0?"Still in budget 🎉":"Over budget ⚠️"} icon={savings>=0?"✅":"⚠️"} iconBg={savings>=0?"#ecfdf5":"#fef2f2"} ani="f3"/>
+            <StatCard
+              label="Real available balance"
+              value={Math.abs(realAvailable)}
+              prefix={realAvailable<0?"-₹":"₹"}
+              sub={realAvailable>=0
+                ? `₹${fmt(carryForward)} carried + ₹${fmt(Math.max(savings,0))} saved`
+                : "Over budget ⚠️"}
+              icon={realAvailable>=0?"💳":"⚠️"}
+              iconBg={realAvailable>=0?"#ecfdf5":"#fef2f2"}
+              ani="f3"
+              highlight={realAvailable>=0}
+              highlightNeg={realAvailable<0}
+            />
             <StatCard label="Expected spend by month end" value={Math.round(totalExpense*1.12)} icon="📅" iconBg="#fffbeb" sub="Based on your current pace" ani="f4"/>
           </div>
 
@@ -453,7 +547,6 @@ export default function Dashboard() {
                 const dateStr=fmtTxDate(t.created_at||t.date);
                 return (
                   <div key={i} style={{borderBottom:i<recent.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${auto?"var(--blue)":"transparent"}`}}>
-                    {/* ── Desktop row (hidden on mobile via CSS) ── */}
                     <div className="txrow tx-desk-row" style={{display:"grid",gridTemplateColumns:TX_COLS,padding:"10px 16px",alignItems:"center"}}>
                       <div style={{width:28,height:28,borderRadius:7,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>{CAT_EMOJI[cat]||"💳"}</div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat}</div>
@@ -466,7 +559,6 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-                    {/* ── Mobile card row (hidden on desktop via CSS) ── */}
                     <div className="tx-mob-row" style={{display:"none",padding:"10px 14px",alignItems:"center",gap:10}}>
                       <div style={{width:36,height:36,borderRadius:9,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
                         {CAT_EMOJI[cat]||"💳"}
@@ -489,6 +581,33 @@ export default function Dashboard() {
 
             {/* Right column */}
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+              {/* Balance Breakdown — desktop only */}
+              <div className="f4 desk-only-block" style={{
+                background:"linear-gradient(135deg,#ecfdf5,#f0fdf4)",
+                border:"1.5px solid var(--gborder)",
+                borderRadius:10,padding:"16px",
+                boxShadow:"0 2px 8px rgba(5,150,105,.08)"
+              }}>
+                <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",marginBottom:12}}>💼 Balance Breakdown</div>
+                {[
+                  {label:"Carried from "+prevMonthLabel,value:carryForward,color:carryForward>=0?"var(--green)":"var(--red)",prefix:carryForward<0?"-₹":"₹"},
+                  {label:`+ ${monthLabel} income`,value:totalIncome,color:"var(--green)",prefix:"₹"},
+                  {label:`− ${monthLabel} expenses`,value:totalExpense,color:"var(--red)",prefix:"₹"},
+                ].map((row,i)=>(
+                  <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<2?"1px dashed var(--gborder)":"none"}}>
+                    <span style={{fontSize:12,color:"var(--ink3)"}}>{row.label}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:row.color}}>{row.prefix}{fmt(Math.abs(row.value))}</span>
+                  </div>
+                ))}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0 0",marginTop:4,borderTop:"2px solid var(--gborder)"}}>
+                  <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>= Real balance</span>
+                  <span style={{fontSize:18,fontWeight:800,color:realAvailable>=0?"var(--green)":"var(--red)",fontFamily:"'Sora',sans-serif"}}>
+                    {realAvailable>=0?"₹":"-₹"}{fmt(Math.abs(realAvailable))}
+                  </span>
+                </div>
+              </div>
+
               {/* Spending breakdown */}
               <div className="f4" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"16px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:12}}>Where am I spending? 🤔</div>
