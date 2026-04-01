@@ -225,10 +225,11 @@ function StatCard({label,value,prefix="₹",sub,change,icon,iconBg,ani,highlight
 }
 
 /* ─── Carry Forward Banner ───────────────────────────────────────────────── */
-function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBalance,savings,realAvailable}) {
+function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBalance,thisMonthNet,realAvailable}) {
   if(selectedMonth==="all") return null;
   const cfPositive=carryForward>=0;
   const realPositive=realAvailable>=0;
+  const netPositive=thisMonthNet>=0;
 
   return (
     <div style={{marginBottom:14}}>
@@ -246,7 +247,7 @@ function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBa
             Carried forward from {prevMonthLabel||"previous months"}
           </div>
           <div style={{fontSize:11,color:"var(--ink4)"}}>
-            Your savings from before {selectedMonth.split("-")[0]+"-"+MONTHS[+selectedMonth.split("-")[1]-1]} are added to this month
+            Your savings from before {MONTHS[+selectedMonth.split("-")[1]-1]+" "+selectedMonth.split("-")[0]} are added to this month
           </div>
         </div>
         <div style={{
@@ -258,7 +259,7 @@ function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBa
         </div>
       </div>
 
-      {/* Formula row */}
+      {/* FIX: Formula row — now uses thisMonthNet (income - expense) not savings */}
       <div style={{
         display:"flex",alignItems:"center",gap:6,
         padding:"10px 14px",borderRadius:10,
@@ -268,8 +269,10 @@ function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBa
         <span style={{fontSize:11,fontWeight:600,color:"var(--ink3)"}}>💼 ₹{fmt(Math.abs(carryForward))}</span>
         <span style={{fontSize:11,color:"var(--ink4)"}}>carried</span>
         <span style={{fontSize:13,color:"var(--ink4)"}}>+</span>
-        <span style={{fontSize:11,fontWeight:600,color:"var(--green)"}}>💰 ₹{fmt(Math.max(savings,0))}</span>
-        <span style={{fontSize:11,color:"var(--ink4)"}}>this month net</span>
+        <span style={{fontSize:11,fontWeight:600,color:netPositive?"var(--green)":"var(--red)"}}>
+          {netPositive?"💰":"💸"} {netPositive?"":"-"}₹{fmt(Math.abs(thisMonthNet))}
+        </span>
+        <span style={{fontSize:11,color:"var(--ink4)"}}>{netPositive?"this month net":"this month overspent"}</span>
         <span style={{fontSize:13,color:"var(--ink4)"}}>=</span>
         <span style={{
           fontSize:13,fontWeight:800,
@@ -292,6 +295,7 @@ function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBa
 const CAT_EMOJI={Food:"🍜",Transport:"🚗",Shopping:"🛍️",Entertainment:"🎬",Health:"💊",Utilities:"⚡",Groceries:"🛒",Coffee:"☕",Books:"📚",Bills:"💡",Travel:"✈️",Medicine:"💊",Income:"💰",Salary:"💼",Refund:"↩️",Cashback:"🎁",Transfer:"🔁",Finance:"💳",Education:"📚",Other:"💳"};
 const BAR_COLORS=["#7c5cbf","#a78bfa","#60a5fa","#34d399","#fb923c"];
 const isAutoTx=t=>t.is_auto===true||t.is_auto===1||t.is_auto==="true"||t.is_auto==="1";
+const isIncomeTx=t=>t._type==="income"||t.type==="income"||t.category==="Income"||t.category==="Salary"||t.category==="Refund"||t.category==="Cashback";
 
 function fmtTxDate(raw) {
   if(!raw) return "—";
@@ -335,11 +339,27 @@ export default function Dashboard() {
     setAllExpenses(Array.isArray(d)?d:[]);
   }
 
+  // ── FIX 1: Load ALL income records with dates so carry forward works ──────
+  // The old code fell back to /api/summary/ which only returns current-month
+  // total as one entry — meaning past months always showed ₹0 income.
   async function loadIncomes() {
     try {
       const r=await fetch(`${API}/api/income/`,{headers:{Authorization:`Bearer ${token}`}});
-      if(r.ok){const d=await r.json();setAllIncomes(Array.isArray(d)?d:[]);return;}
+      if(r.ok){
+        const d=await r.json();
+        // Verify we got proper dated records (not an aggregated object)
+        if(Array.isArray(d)&&d.length>0&&(d[0].date||d[0].created_at)){
+          setAllIncomes(d);
+          return;
+        }
+        // If array but no dates, still use it (better than summary fallback)
+        if(Array.isArray(d)){
+          setAllIncomes(d);
+          return;
+        }
+      }
     } catch(_){}
+    // Last resort: summary API — only covers current month, carry forward breaks
     try {
       const r=await fetch(`${API}/api/summary/`,{headers:{Authorization:`Bearer ${token}`}});
       if(r.ok){
@@ -380,7 +400,11 @@ export default function Dashboard() {
 
   const totalExpense=useMemo(()=>filteredExpenses.reduce((s,e)=>s+e.amount,0),[filteredExpenses]);
   const totalIncome=useMemo(()=>filteredIncomes.reduce((s,e)=>s+e.amount,0),[filteredIncomes]);
-  const savings=totalIncome-totalExpense;
+
+  // ── FIX 2: thisMonthNet = income − expense for the selected month only ────
+  // Old code used "savings" and passed it as "this month net" to the banner,
+  // but the banner showed "₹0 this month net" when income hadn't loaded yet.
+  const thisMonthNet=totalIncome-totalExpense;
 
   // ── All-time totals ───────────────────────────────────────────────────────
   const allTimeIncome=useMemo(()=>allIncomes.reduce((s,e)=>s+e.amount,0),[allIncomes]);
@@ -401,7 +425,7 @@ export default function Dashboard() {
     return `${MONTHS[+mo-1]} ${y}`;
   },[prevMonthKey]);
 
-  // ── Carry Forward = cumulative balance BEFORE selected month ──────────────
+  // ── Carry Forward = all income − all expense BEFORE selected month ────────
   const carryForward=useMemo(()=>{
     if(selectedMonth==="all") return 0;
     const incBefore=allIncomes
@@ -413,8 +437,9 @@ export default function Dashboard() {
     return incBefore-expBefore;
   },[allIncomes,allExpenses,selectedMonth]);
 
-  // ── Real available = carry forward + this month net ───────────────────────
-  const realAvailable=carryForward+savings;
+  // ── FIX 3: Real available = carryForward + thisMonthNet ───────────────────
+  // = everything saved before + (income this month − spent this month)
+  const realAvailable=carryForward+thisMonthNet;
 
   const prevExpense=useMemo(()=>{
     if(!prevMonthKey) return null;
@@ -439,13 +464,18 @@ export default function Dashboard() {
     return `${MONTHS[+mo-1]} ${y}`;
   },[selectedMonth]);
 
-  const recent=useMemo(()=>[...filteredExpenses]
-    .sort((a,b)=>{
-      if(b.id&&a.id&&b.id!==a.id) return b.id-a.id;
-      const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+(!(a.created_at||"").includes("Z")&&!(a.created_at||"").includes("+")?"Z":""));
-      const db=new Date(((b.created_at||b.date||"").replace(" ","T"))+(!(b.created_at||"").includes("Z")&&!(b.created_at||"").includes("+")?"Z":""));
-      return db-da;
-    }).slice(0,8),[filteredExpenses]);
+  // ── FIX 4: Merge expenses + incomes in recent list so income txns show too ─
+  const recent=useMemo(()=>{
+    const exps=filteredExpenses.map(t=>({...t,_type:"expense"}));
+    const incs=filteredIncomes.map(t=>({...t,_type:"income"}));
+    return [...exps,...incs]
+      .sort((a,b)=>{
+        if(b.id&&a.id&&b.id!==a.id) return b.id-a.id;
+        const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+(!(a.created_at||"").includes("Z")&&!(a.created_at||"").includes("+")?"Z":""));
+        const db=new Date(((b.created_at||b.date||"").replace(" ","T"))+(!(b.created_at||"").includes("Z")&&!(b.created_at||"").includes("+")?"Z":""));
+        return db-da;
+      }).slice(0,8);
+  },[filteredExpenses,filteredIncomes]);
 
   if(loading) return (
     <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}>
@@ -456,7 +486,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const TX_COLS="36px 110px 1fr 90px 150px 80px";
+  const TX_COLS="36px 110px 1fr 90px 150px 130px";
 
   return (
     <div style={{display:"flex",minHeight:"100vh"}}>
@@ -502,28 +532,49 @@ export default function Dashboard() {
             prevMonthLabel={prevMonthLabel}
             selectedMonth={selectedMonth}
             allTimeBalance={allTimeBalance}
-            savings={savings}
+            thisMonthNet={thisMonthNet}
             realAvailable={realAvailable}
           />
 
           {/* Stats grid */}
           <div className="stats-grid fade" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
-            <StatCard label={`Money received — ${monthLabel}`} value={totalIncome} icon="💰" iconBg="#ecfdf5" change={incomeChange} ani="f1"/>
-            <StatCard label={`Money spent — ${monthLabel}`} value={totalExpense} icon="💸" iconBg="#faf5ff" change={expenseChange} ani="f2"/>
+            <StatCard
+              label={`Money received — ${monthLabel}`}
+              value={totalIncome}
+              icon="💰"
+              iconBg="#ecfdf5"
+              change={incomeChange}
+              ani="f1"
+            />
+            <StatCard
+              label={`Money spent — ${monthLabel}`}
+              value={totalExpense}
+              icon="💸"
+              iconBg="#faf5ff"
+              change={expenseChange}
+              ani="f2"
+            />
             <StatCard
               label="Real available balance"
               value={Math.abs(realAvailable)}
               prefix={realAvailable<0?"-₹":"₹"}
               sub={realAvailable>=0
-                ? `₹${fmt(carryForward)} carried + ₹${fmt(Math.max(savings,0))} saved`
-                : "Over budget ⚠️"}
+                ? `₹${fmt(carryForward)} carried ${thisMonthNet>=0?`+ ₹${fmt(thisMonthNet)} net`:`− ₹${fmt(Math.abs(thisMonthNet))} net`}`
+                : `₹${fmt(carryForward)} carried − ₹${fmt(Math.abs(thisMonthNet))} overspent`}
               icon={realAvailable>=0?"💳":"⚠️"}
               iconBg={realAvailable>=0?"#ecfdf5":"#fef2f2"}
               ani="f3"
               highlight={realAvailable>=0}
               highlightNeg={realAvailable<0}
             />
-            <StatCard label="Expected spend by month end" value={Math.round(totalExpense*1.12)} icon="📅" iconBg="#fffbeb" sub="Based on your current pace" ani="f4"/>
+            <StatCard
+              label="Expected spend by month end"
+              value={Math.round(totalExpense*1.12)}
+              icon="📅"
+              iconBg="#fffbeb"
+              sub="Based on your current pace"
+              ani="f4"
+            />
           </div>
 
           {/* Main grid */}
@@ -542,38 +593,105 @@ export default function Dashboard() {
                 </div>
               ):recent.map((t,i)=>{
                 const auto=isAutoTx(t);
+                const isIncome=isIncomeTx(t);
                 const merchant=t.merchant||t.merchant_name||t.description||null;
-                const cat=t.category||"Other";
+                const cat=t.category||(isIncome?"Income":"Other");
                 const dateStr=fmtTxDate(t.created_at||t.date);
+                const leftBorderColor=auto?"var(--blue)":"#8b5cf6";
+
                 return (
-                  <div key={i} style={{borderBottom:i<recent.length-1?"1px solid var(--border)":"none",borderLeft:`3px solid ${auto?"var(--blue)":"transparent"}`}}>
+                  <div key={`${t._type}-${t.id}-${i}`} style={{
+                    borderBottom:i<recent.length-1?"1px solid var(--border)":"none",
+                    borderLeft:`3px solid ${leftBorderColor}`
+                  }}>
+
+                    {/* ── DESKTOP ROW ── */}
                     <div className="txrow tx-desk-row" style={{display:"grid",gridTemplateColumns:TX_COLS,padding:"10px 16px",alignItems:"center"}}>
-                      <div style={{width:28,height:28,borderRadius:7,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>{CAT_EMOJI[cat]||"💳"}</div>
+                      <div style={{width:28,height:28,borderRadius:7,background:isIncome?"var(--gbg)":auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>
+                        {CAT_EMOJI[cat]||"💳"}
+                      </div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat}</div>
                       <div style={{fontSize:12,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
-                      <div style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>₹{fmt(t.amount)}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:isIncome?"var(--green)":"var(--red)"}}>
+                        {isIncome?"+":"-"}₹{fmt(t.amount)}
+                      </div>
                       <div style={{fontSize:11,color:"var(--ink3)"}}>{dateStr}</div>
-                      <div>
-                        <span className="badge" style={{background:auto?"var(--bbg)":"#f9fafb",color:auto?"var(--blue)":"var(--ink3)",border:`1px solid ${auto?"#bfdbfe":"var(--border)"}`,fontSize:10}}>
+                      {/* FIX 5: Two badges — type (Income/Expense) + source (Auto/Manual) */}
+                      <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                        <span className="badge" style={{
+                          background:isIncome?"var(--gbg)":"var(--rbg)",
+                          color:isIncome?"var(--green)":"var(--red)",
+                          border:`1px solid ${isIncome?"var(--gborder)":"var(--rborder)"}`,
+                          fontSize:10
+                        }}>
+                          {isIncome?"✅ Income":"💸 Expense"}
+                        </span>
+                        <span className="badge" style={{
+                          background:auto?"var(--bbg)":"#f5f3ff",
+                          color:auto?"var(--blue)":"#6d28d9",
+                          border:`1px solid ${auto?"var(--bborder)":"#ddd6fe"}`,
+                          fontSize:10
+                        }}>
                           {auto?"🤖 Auto":"✍️ Manual"}
                         </span>
                       </div>
                     </div>
-                    <div className="tx-mob-row" style={{display:"none",padding:"10px 14px",alignItems:"center",gap:10}}>
-                      <div style={{width:36,height:36,borderRadius:9,background:auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+
+                    {/* ── MOBILE ROW ── */}
+                    <div className="tx-mob-row" style={{display:"none",padding:"12px 14px",alignItems:"center",gap:10}}>
+                      <div style={{
+                        width:40,height:40,borderRadius:10,
+                        background:isIncome?"var(--gbg)":auto?"var(--bbg)":"#f5f3ff",
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        fontSize:18,flexShrink:0
+                      }}>
                         {CAT_EMOJI[cat]||"💳"}
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                        {/* Top: category + coloured amount */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                           <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>{cat}</span>
-                          <span style={{fontSize:14,fontWeight:800,color:"var(--ink)",fontFamily:"'Sora',sans-serif"}}>₹{fmt(t.amount)}</span>
+                          <span style={{
+                            fontSize:14,fontWeight:800,
+                            color:isIncome?"var(--green)":"var(--red)",
+                            fontFamily:"'Sora',sans-serif"
+                          }}>
+                            {isIncome?"+":"-"}₹{fmt(t.amount)}
+                          </span>
                         </div>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                          <span style={{fontSize:11,color:"var(--ink3)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"60%"}}>{merchant||"—"}</span>
+                        {/* Middle: merchant */}
+                        <div style={{fontSize:11,color:"var(--ink3)",marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                          {merchant||"—"}
+                        </div>
+                        {/* Bottom: two badges + date */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}}>
+                          <div style={{display:"flex",gap:4}}>
+                            {/* Badge 1: Income or Expense */}
+                            <span style={{
+                              display:"inline-flex",alignItems:"center",gap:3,
+                              padding:"2px 7px",borderRadius:99,fontSize:10,fontWeight:500,
+                              background:isIncome?"var(--gbg)":"var(--rbg)",
+                              color:isIncome?"var(--green)":"var(--red)",
+                              border:`0.5px solid ${isIncome?"var(--gborder)":"var(--rborder)"}`
+                            }}>
+                              {isIncome?"✅ Income":"💸 Expense"}
+                            </span>
+                            {/* Badge 2: Auto or Manual */}
+                            <span style={{
+                              display:"inline-flex",alignItems:"center",gap:3,
+                              padding:"2px 7px",borderRadius:99,fontSize:10,fontWeight:500,
+                              background:auto?"var(--bbg)":"#f5f3ff",
+                              color:auto?"var(--blue)":"#6d28d9",
+                              border:`0.5px solid ${auto?"var(--bborder)":"#ddd6fe"}`
+                            }}>
+                              {auto?"🤖 Auto":"✍️ Manual"}
+                            </span>
+                          </div>
                           <span style={{fontSize:10,color:"var(--ink4)",flexShrink:0}}>{dateStr}</span>
                         </div>
                       </div>
                     </div>
+
                   </div>
                 );
               })}

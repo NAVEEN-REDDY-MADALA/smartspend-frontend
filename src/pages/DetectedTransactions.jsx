@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   injectMobileCSS, fmt, CAT_EMOJI,
   Icon, ICONS, BottomNav, MobileHeader, LoadingScreen
 } from "./MobileLayout";
 
-/* ─── CSS ─────────────────────────────────────────────────────────────────── */
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@600;700;800&display=swap');
   *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
@@ -25,18 +24,16 @@ const CSS = `
   @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes spin{to{transform:rotate(360deg)}}
   @keyframes slideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideOut{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(60px)}}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .fade{animation:fadeUp .25s ease both;}
+  .slide-out{animation:slideOut .25s ease forwards;}
   .slink{transition:background .15s,color .15s;cursor:pointer}
   .slink:hover{background:rgba(255,255,255,.09)!important;color:#fff!important}
   .slink.active{background:rgba(255,255,255,.16)!important;color:#fff!important}
   .chip-btn{transition:all .15s;cursor:pointer;border:none;font-family:inherit;}
   .pulse{animation:pulse 2s infinite;}
-
-  /* ── Sidebar (desktop) ── */
   .sidebar{width:210px;flex-shrink:0;background:var(--sb);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow:hidden;}
-
-  /* ── Responsive ── */
   @media(max-width:900px){
     .sidebar{display:none!important;}
     .desk-hdr{display:none!important;}
@@ -59,7 +56,6 @@ function injectCSS() {
   injectMobileCSS();
 }
 
-/* ─── Helpers ─────────────────────────────────────────────────────────────── */
 const fmtDate = ds => {
   const s = ds.endsWith("Z")||ds.includes("+") ? ds : ds+"Z";
   return new Date(s).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:true});
@@ -76,14 +72,12 @@ const NAV_SECTIONS=[
     {to:"/budgets",label:"My Budgets",icon:"budget"},
   ]},
   {label:"Auto Features",items:[
-    // {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
+    {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
   ]},
   {label:"Account",items:[{to:"/settings",label:"Settings",icon:"home"}]},
 ];
 
-
-/* ─── Desktop Sidebar ─────────────────────────────────────────────────────── */
 function Sidebar({onLogout,pendingCount}) {
   const path=window.location.pathname;
   return (
@@ -115,19 +109,17 @@ function Sidebar({onLogout,pendingCount}) {
   );
 }
 
-/* ─── Compact Summary Bar ─────────────────────────────────────────────────── */
 function SummaryBar({pending}) {
   const totalDebit  = pending.filter(t=>t.transaction_type!=="credit").reduce((s,t)=>s+t.amount,0);
   const totalCredit = pending.filter(t=>t.transaction_type==="credit").reduce((s,t)=>s+t.amount,0);
   const debitCount  = pending.filter(t=>t.transaction_type!=="credit").length;
   const creditCount = pending.filter(t=>t.transaction_type==="credit").length;
-
   return (
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}} className="summary-row">
       {[
-        {label:"Pending",   value:pending.length,          sub:"total",             bg:"var(--pbg)",  color:"var(--purple)", bdr:"var(--pborder)"},
-        {label:"Expenses",  value:`₹${fmt(totalDebit)}`,   sub:`${debitCount} debits`,   bg:"var(--rbg)",  color:"var(--red)",    bdr:"var(--rborder)"},
-        {label:"Income",    value:`₹${fmt(totalCredit)}`,  sub:`${creditCount} credits`, bg:"var(--gbg)",  color:"var(--green)",  bdr:"var(--gborder)"},
+        {label:"Pending",value:pending.length,sub:"total",bg:"var(--pbg)",color:"var(--purple)",bdr:"var(--pborder)"},
+        {label:"Expenses",value:`₹${fmt(totalDebit)}`,sub:`${debitCount} debits`,bg:"var(--rbg)",color:"var(--red)",bdr:"var(--rborder)"},
+        {label:"Income",value:`₹${fmt(totalCredit)}`,sub:`${creditCount} credits`,bg:"var(--gbg)",color:"var(--green)",bdr:"var(--gborder)"},
       ].map((s,i)=>(
         <div key={i} style={{background:s.bg,border:`1px solid ${s.bdr}`,borderRadius:10,padding:"9px 11px"}}>
           <div style={{fontSize:10,fontWeight:700,color:s.color,textTransform:"uppercase",letterSpacing:".4px",marginBottom:2}}>{s.label}</div>
@@ -139,8 +131,7 @@ function SummaryBar({pending}) {
   );
 }
 
-/* ─── Compact Transaction Card (mobile-first) ─────────────────────────────── */
-function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
+function TxnCard({txn,onAccept,onIgnore,accepting,ignoring,removing}) {
   const isCredit = txn.transaction_type==="credit";
   const busy     = accepting||ignoring;
   const isTransfer = isCredit && (txn.category_guess==="Transfer");
@@ -149,31 +140,21 @@ function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
   const col = !isCredit?"var(--red)":isTransfer?"var(--blue)":isRefund||isCashback?"var(--amber)":"var(--green)";
   const bg  = !isCredit?"var(--rbg)":isTransfer?"var(--bbg)":isRefund||isCashback?"var(--abg)":"var(--gbg)";
   const bdr = !isCredit?"var(--rborder)":isTransfer?"var(--bborder)":isRefund||isCashback?"var(--aborder)":"var(--gborder)";
-  // For credits: if category_guess is Transfer/Refund/Cashback, use that emoji; else use credit_source emoji
-  const resolvedCreditCat = txn.category_guess && ["Transfer","Refund","Cashback","Salary","Income"].includes(txn.category_guess)
-    ? txn.category_guess : null;
-  const emoji = isCredit
-    ? (CAT_EMOJI[resolvedCreditCat] || CREDIT_SOURCE_EMOJI[txn.credit_source] || "💰")
-    : (CAT_EMOJI[txn.category_guess] || "💸");
+  const resolvedCreditCat = txn.category_guess && ["Transfer","Refund","Cashback","Salary","Income"].includes(txn.category_guess) ? txn.category_guess : null;
+  const emoji = isCredit ? (CAT_EMOJI[resolvedCreditCat] || CREDIT_SOURCE_EMOJI[txn.credit_source] || "💰") : (CAT_EMOJI[txn.category_guess] || "💸");
 
   return (
-    <div className="fade txn-card" style={{
-      background:"var(--surface)",borderRadius:12,
-      padding:"12px 14px",
-      border:`1px solid var(--border)`,
-      borderLeft:`3px solid ${col}`,
-      boxShadow:"0 1px 4px rgba(0,0,0,.04)",
-      marginBottom:8,
+    <div className={removing ? "slide-out" : "fade txn-card"} style={{
+      background:"var(--surface)",borderRadius:12,padding:"12px 14px",
+      border:`1px solid var(--border)`,borderLeft:`3px solid ${col}`,
+      boxShadow:"0 1px 4px rgba(0,0,0,.04)",marginBottom:8,
+      opacity: removing ? 0 : 1,
     }}>
-      {/* Top row: emoji + amount + type badge + date */}
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
-        {/* Small icon */}
         <div style={{width:34,height:34,borderRadius:9,background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
           {emoji}
         </div>
-
         <div style={{flex:1,minWidth:0}}>
-          {/* Amount + badge on one line */}
           <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
             <span style={{fontSize:15,fontWeight:800,color:col,fontFamily:"'Sora',sans-serif",letterSpacing:"-.3px"}}>
               {isCredit?"+":"-"}₹{fmt(txn.amount)}
@@ -187,54 +168,28 @@ function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
               </span>
             )}
           </div>
-          {/* Merchant + category + date on one compact line */}
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
             <span style={{fontSize:12,fontWeight:600,color:"var(--ink2)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:140}}>
-              {isCredit?txn.merchant||"Unknown":(txn.merchant||"Unknown")}
+              {txn.merchant||"Unknown"}
             </span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>·</span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>
-              {isCredit
-                ?(txn.category_guess&&txn.category_guess!=="Income"
-                  ?txn.category_guess
-                  :(txn.credit_source||"Income"))
-                :(txn.category_guess||"Other")}
+              {isCredit?(txn.category_guess&&txn.category_guess!=="Income"?txn.category_guess:(txn.credit_source||"Income")):(txn.category_guess||"Other")}
             </span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>·</span>
             <span style={{fontSize:10,color:"var(--ink4)"}}>{fmtDate(txn.transaction_date)}</span>
           </div>
         </div>
       </div>
-
-      {/* Bottom row: action buttons — compact side by side */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-        <button
-          onClick={()=>onAccept(txn.sms_hash,txn)}
-          disabled={busy}
-          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-            padding:"8px 0",borderRadius:8,border:"none",
-            background:busy?"#f3f4f6":"var(--green)",
-            color:busy?"var(--ink4)":"#fff",
-            fontSize:12,fontWeight:700,cursor:busy?"not-allowed":"pointer",
-            fontFamily:"inherit",transition:"opacity .15s"}}>
-          {accepting
-            ? <span style={{display:"inline-block",animation:"spin .7s linear infinite",width:12,height:12}}><Icon d={ICONS.refresh} size={12}/></span>
-            : <Icon d={ICONS.check} size={12}/>}
+        <button onClick={()=>onAccept(txn.sms_hash,txn)} disabled={busy}
+          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"8px 0",borderRadius:8,border:"none",background:busy?"#f3f4f6":"var(--green)",color:busy?"var(--ink4)":"#fff",fontSize:12,fontWeight:700,cursor:busy?"not-allowed":"pointer",fontFamily:"inherit",transition:"opacity .15s"}}>
+          {accepting?<span style={{display:"inline-block",animation:"spin .7s linear infinite",width:12,height:12}}><Icon d={ICONS.refresh} size={12}/></span>:<Icon d={ICONS.check} size={12}/>}
           {accepting?"Adding…":isCredit?"Add Income":"Add Expense"}
         </button>
-        <button
-          onClick={()=>onIgnore(txn.sms_hash)}
-          disabled={busy}
-          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-            padding:"8px 0",borderRadius:8,
-            border:"1px solid var(--border)",
-            background:busy?"#f3f4f6":"var(--surface)",
-            color:busy?"var(--ink4)":"var(--ink3)",
-            fontSize:12,fontWeight:600,cursor:busy?"not-allowed":"pointer",
-            fontFamily:"inherit",transition:"opacity .15s"}}>
-          {ignoring
-            ? <span style={{display:"inline-block",animation:"spin .7s linear infinite"}}><Icon d={ICONS.refresh} size={12}/></span>
-            : <Icon d={ICONS.x} size={12}/>}
+        <button onClick={()=>onIgnore(txn.sms_hash)} disabled={busy}
+          style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"8px 0",borderRadius:8,border:"1px solid var(--border)",background:busy?"#f3f4f6":"var(--surface)",color:busy?"var(--ink4)":"var(--ink3)",fontSize:12,fontWeight:600,cursor:busy?"not-allowed":"pointer",fontFamily:"inherit",transition:"opacity .15s"}}>
+          {ignoring?<span style={{display:"inline-block",animation:"spin .7s linear infinite"}}><Icon d={ICONS.refresh} size={12}/></span>:<Icon d={ICONS.x} size={12}/>}
           {ignoring?"Ignoring…":"Ignore"}
         </button>
       </div>
@@ -242,24 +197,20 @@ function TxnCard({txn,onAccept,onIgnore,accepting,ignoring}) {
   );
 }
 
-/* ─── Desktop Transaction Row (unchanged) ────────────────────────────────── */
-function TxnRow({txn,onAccept,onIgnore,accepting,ignoring}) {
+function TxnRow({txn,onAccept,onIgnore,accepting,ignoring,removing}) {
   const isCredit = txn.transaction_type==="credit";
   const busy     = accepting||ignoring;
   const isTransferR = isCredit && (txn.category_guess==="Transfer");
-  const isRefundR   = isCredit && (txn.category_guess==="Refund"   || txn.credit_source==="Refund");
-  const isCashbackR = isCredit && (txn.category_guess==="Cashback" || txn.credit_source==="Cashback");
+  const isRefundR   = isCredit && (txn.category_guess==="Refund"||txn.credit_source==="Refund");
+  const isCashbackR = isCredit && (txn.category_guess==="Cashback"||txn.credit_source==="Cashback");
   const col = !isCredit?"var(--red)":isTransferR?"var(--blue)":isRefundR||isCashbackR?"var(--amber)":"var(--green)";
   const bg  = !isCredit?"var(--rbg)":isTransferR?"var(--bbg)":isRefundR||isCashbackR?"var(--abg)":"var(--gbg)";
   const bdr = !isCredit?"var(--rborder)":isTransferR?"var(--bborder)":isRefundR||isCashbackR?"var(--aborder)":"var(--gborder)";
-  const resolvedCreditCatR = txn.category_guess && ["Transfer","Refund","Cashback","Salary","Income"].includes(txn.category_guess)
-    ? txn.category_guess : null;
-  const emoji = isCredit
-    ? (CAT_EMOJI[resolvedCreditCatR] || CREDIT_SOURCE_EMOJI[txn.credit_source] || "💰")
-    : (CAT_EMOJI[txn.category_guess] || "💸");
+  const resolvedCreditCatR = txn.category_guess && ["Transfer","Refund","Cashback","Salary","Income"].includes(txn.category_guess) ? txn.category_guess : null;
+  const emoji = isCredit?(CAT_EMOJI[resolvedCreditCatR]||CREDIT_SOURCE_EMOJI[txn.credit_source]||"💰"):(CAT_EMOJI[txn.category_guess]||"💸");
 
   return (
-    <div className="fade" style={{display:"flex",alignItems:"center",gap:14,background:"var(--surface)",borderRadius:10,padding:"14px 18px",border:`1px solid var(--border)`,borderLeft:`4px solid ${col}`,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+    <div className={removing?"slide-out":"fade"} style={{display:"flex",alignItems:"center",gap:14,background:"var(--surface)",borderRadius:10,padding:"14px 18px",border:`1px solid var(--border)`,borderLeft:`4px solid ${col}`,boxShadow:"0 1px 4px rgba(0,0,0,.04)",transition:"opacity .2s"}}>
       <div style={{width:42,height:42,borderRadius:10,background:bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>{emoji}</div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
@@ -269,13 +220,7 @@ function TxnRow({txn,onAccept,onIgnore,accepting,ignoring}) {
         </div>
         <div style={{fontSize:13,color:"var(--ink2)",fontWeight:500}}>{isCredit?`From: ${txn.merchant||"Unknown"}`:(txn.merchant||"Unknown merchant")}</div>
         <div style={{display:"flex",gap:12,marginTop:3}}>
-          <span style={{fontSize:11,color:"var(--ink4)"}}>
-            {isCredit
-              ?(txn.category_guess&&txn.category_guess!=="Income"
-                ?txn.category_guess
-                :(txn.credit_source||"Income"))
-              :(txn.category_guess||"Other")}
-          </span>
+          <span style={{fontSize:11,color:"var(--ink4)"}}>{isCredit?(txn.category_guess&&txn.category_guess!=="Income"?txn.category_guess:(txn.credit_source||"Income")):(txn.category_guess||"Other")}</span>
           <span style={{fontSize:11,color:"var(--ink4)"}}>{fmtDate(txn.transaction_date)}</span>
         </div>
       </div>
@@ -295,98 +240,47 @@ function TxnRow({txn,onAccept,onIgnore,accepting,ignoring}) {
   );
 }
 
-/* ─── Compact Filter Bar ──────────────────────────────────────────────────── */
 function FilterBar({filters,onChange,counts}) {
-  const chip=(active)=>({
-    padding:"5px 11px",borderRadius:99,fontSize:11,fontWeight:600,
-    background:active?"var(--accent)":"var(--surface)",
-    color:active?"#fff":"var(--ink3)",
-    border:active?"none":"1px solid var(--border)",
-    cursor:"pointer",fontFamily:"inherit",
-  });
-
-  const typeOpts=[
-    {value:"all",   label:"All",       count:counts.all},
-    {value:"debit", label:"💸 Debits",  count:counts.debit},
-    {value:"credit",label:"💰 Credits", count:counts.credit},
-  ];
-  const amtOpts=[
-    {value:"all",   label:"Any"},
-    {value:"small", label:"<₹500"},
-    {value:"medium",label:"₹500–2K"},
-    {value:"large", label:">₹2K"},
-  ];
-  const dateOpts=[
-    {value:"all",  label:"All time"},
-    {value:"today",label:"Today"},
-    {value:"week", label:"This week"},
-    {value:"month",label:"This month"},
-  ];
+  const chip=(active)=>({padding:"5px 11px",borderRadius:99,fontSize:11,fontWeight:600,background:active?"var(--accent)":"var(--surface)",color:active?"#fff":"var(--ink3)",border:active?"none":"1px solid var(--border)",cursor:"pointer",fontFamily:"inherit"});
+  const typeOpts=[{value:"all",label:"All",count:counts.all},{value:"debit",label:"💸 Debits",count:counts.debit},{value:"credit",label:"💰 Credits",count:counts.credit}];
+  const amtOpts=[{value:"all",label:"Any"},{value:"small",label:"<₹500"},{value:"medium",label:"₹500–2K"},{value:"large",label:">₹2K"}];
+  const dateOpts=[{value:"all",label:"All time"},{value:"today",label:"Today"},{value:"week",label:"This week"},{value:"month",label:"This month"}];
   const catOpts=["All","Food","Groceries","Shopping","Travel","Entertainment","Bills","Medicine","Education","Finance","Transfer","Income","Refund","Cashback","Salary","Other"];
-
   return (
     <div style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"12px 14px",marginBottom:10}}>
       <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
         <Icon d={ICONS.filter} size={13} color="var(--ink3)"/>
         <span style={{fontSize:12,fontWeight:700,color:"var(--ink2)"}}>Filters</span>
         {(filters.type!=="all"||filters.amount!=="all"||filters.category!=="All"||filters.date!=="all")&&(
-          <button onClick={()=>onChange({type:"all",amount:"all",category:"All",date:"all"})}
-            style={{marginLeft:"auto",fontSize:11,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
-            Clear ✕
-          </button>
+          <button onClick={()=>onChange({type:"all",amount:"all",category:"All",date:"all"})} style={{marginLeft:"auto",fontSize:11,color:"var(--accent)",background:"none",border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>Clear ✕</button>
         )}
       </div>
-
-      {/* Type */}
       <div style={{marginBottom:8}}>
         <div style={{fontSize:10,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".6px",marginBottom:5}}>Type</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {typeOpts.map(o=>(
-            <button key={o.value} className="chip-btn" style={chip(filters.type===o.value)} onClick={()=>onChange({...filters,type:o.value})}>
-              {o.label}{o.count>0&&<span style={{marginLeft:4,opacity:.7}}>({o.count})</span>}
-            </button>
-          ))}
+          {typeOpts.map(o=><button key={o.value} className="chip-btn" style={chip(filters.type===o.value)} onClick={()=>onChange({...filters,type:o.value})}>{o.label}{o.count>0&&<span style={{marginLeft:4,opacity:.7}}>({o.count})</span>}</button>)}
         </div>
       </div>
-
-      {/* Amount + Date on one row */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:8}} className="filter-grid">
         <div>
           <div style={{fontSize:10,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".6px",marginBottom:5}}>Amount</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {amtOpts.map(o=>(
-              <button key={o.value} className="chip-btn" style={chip(filters.amount===o.value)} onClick={()=>onChange({...filters,amount:o.value})}>{o.label}</button>
-            ))}
-          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{amtOpts.map(o=><button key={o.value} className="chip-btn" style={chip(filters.amount===o.value)} onClick={()=>onChange({...filters,amount:o.value})}>{o.label}</button>)}</div>
         </div>
         <div>
           <div style={{fontSize:10,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".6px",marginBottom:5}}>Date</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {dateOpts.map(o=>(
-              <button key={o.value} className="chip-btn" style={chip(filters.date===o.value)} onClick={()=>onChange({...filters,date:o.value})}>{o.label}</button>
-            ))}
-          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{dateOpts.map(o=><button key={o.value} className="chip-btn" style={chip(filters.date===o.value)} onClick={()=>onChange({...filters,date:o.value})}>{o.label}</button>)}</div>
         </div>
       </div>
-
-      {/* Category */}
       {filters.type!=="credit"&&(
         <div>
           <div style={{fontSize:10,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:".6px",marginBottom:5}}>Category</div>
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            {catOpts.map(c=>(
-              <button key={c} className="chip-btn" style={chip(filters.category===c)} onClick={()=>onChange({...filters,category:c})}>
-                {CAT_EMOJI[c]||""} {c}
-              </button>
-            ))}
-          </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>{catOpts.map(c=><button key={c} className="chip-btn" style={chip(filters.category===c)} onClick={()=>onChange({...filters,category:c})}>{CAT_EMOJI[c]||""} {c}</button>)}</div>
         </div>
       )}
     </div>
   );
 }
 
-/* ─── Main ────────────────────────────────────────────────────────────────── */
 export default function DetectedTransactions() {
   injectCSS();
   const navigate=useNavigate();
@@ -396,13 +290,24 @@ export default function DetectedTransactions() {
   const [spinning,   setSpinning]  =useState(false);
   const [accepting,  setAccepting] =useState(null);
   const [ignoring,   setIgnoring]  =useState(null);
+  // ✅ Track which items are being removed (for animation)
+  const [removing,   setRemoving]  =useState(new Set());
   const [toast,      setToast]     =useState(null);
   const [showFilter, setShowFilter]=useState(false);
   const [filters,    setFilters]   =useState({type:"all",amount:"all",category:"All",date:"all"});
+  // ✅ Track if user is actively accepting/ignoring to pause auto-refresh
+  const busyRef = useRef(false);
 
   const API="https://smartspend-backend-production-6f21.up.railway.app";
 
-  useEffect(()=>{load();const iv=setInterval(load,5000);return()=>clearInterval(iv);},[]);
+  useEffect(()=>{
+    load();
+    // ✅ Only auto-refresh if not currently processing
+    const iv=setInterval(()=>{
+      if(!busyRef.current) load();
+    },5000);
+    return()=>clearInterval(iv);
+  },[]);
 
   async function load() {
     const token=localStorage.getItem("token");
@@ -411,7 +316,12 @@ export default function DetectedTransactions() {
       const r=await fetch(`${API}/api/detected/pending`,{headers:{Authorization:`Bearer ${token}`}});
       if(r.status===401){localStorage.removeItem("token");navigate("/");return;}
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      setPending(await r.json()); setError(null);
+      const data = await r.json();
+      // ✅ Only update if not busy — prevents overwriting optimistic updates
+      if(!busyRef.current) {
+        setPending(data);
+        setError(null);
+      }
     } catch { setError("Couldn't load. Check your connection."); }
     finally { setLoading(false); setSpinning(false); }
   }
@@ -424,11 +334,8 @@ export default function DetectedTransactions() {
     if(filters.amount==="medium") r=r.filter(t=>t.amount>=500&&t.amount<=2000);
     if(filters.amount==="large")  r=r.filter(t=>t.amount>2000);
     if(filters.category!=="All") r=r.filter(t=>{
-      if(t.transaction_type==="credit"){
-        const cat = t.category_guess || t.credit_source || "Income";
-        return cat === filters.category;
-      }
-      return (t.category_guess||"Other") === filters.category;
+      if(t.transaction_type==="credit"){const cat=t.category_guess||t.credit_source||"Income";return cat===filters.category;}
+      return (t.category_guess||"Other")===filters.category;
     });
     const now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
     const week=new Date(today);week.setDate(today.getDate()-7);
@@ -449,49 +356,88 @@ export default function DetectedTransactions() {
 
   function showToast(text,ok){setToast({text,ok});setTimeout(()=>setToast(null),3500);}
 
-  async function handleAccept(smsHash,originalTxn) {
+  // ✅ Optimistic remove — removes from UI immediately, syncs after
+  function optimisticRemove(smsHash, callback) {
+    busyRef.current = true;
+    // Add to removing set for exit animation
+    setRemoving(prev => new Set([...prev, smsHash]));
+    // Remove from list after animation (250ms)
+    setTimeout(() => {
+      setPending(prev => prev.filter(t => t.sms_hash !== smsHash));
+      setRemoving(prev => { const next = new Set(prev); next.delete(smsHash); return next; });
+      callback();
+    }, 250);
+  }
+
+  async function handleAccept(smsHash, originalTxn) {
     const token=localStorage.getItem("token");
     const isCredit=originalTxn.transaction_type==="credit";
     setAccepting(smsHash);
-    try {
-      const r=await fetch(`${API}/api/detected/accept/${smsHash}`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});
-      if(!r.ok) throw new Error();
-      const result=await r.json();
-      const amount=result.amount??originalTxn.amount;
-      showToast(isCredit?`₹${fmt(amount)} added to Income 💰`:`₹${fmt(amount)} added as Expense ✓`,true);
-      window.dispatchEvent(new Event("transaction-confirmed"));
-      await load();
-    } catch { showToast("Something went wrong. Try again.",false); }
-    finally { setAccepting(null); }
+
+    // ✅ Remove from UI immediately with animation
+    optimisticRemove(smsHash, async () => {
+      try {
+        const r=await fetch(`${API}/api/detected/accept/${smsHash}`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});
+        if(!r.ok) {
+          // ❌ Failed — add back to list
+          setPending(prev=>[originalTxn,...prev]);
+          showToast("Something went wrong. Try again.",false);
+        } else {
+          const result=await r.json();
+          const amount=result.amount??originalTxn.amount;
+          showToast(isCredit?`₹${fmt(amount)} added to Income 💰`:`₹${fmt(amount)} added as Expense ✓`,true);
+          window.dispatchEvent(new Event("transaction-confirmed"));
+          // ✅ Sync with backend after 2 seconds
+          setTimeout(()=>{busyRef.current=false;load();},2000);
+        }
+      } catch {
+        setPending(prev=>[originalTxn,...prev]);
+        showToast("Something went wrong. Try again.",false);
+        busyRef.current=false;
+      } finally {
+        setAccepting(null);
+      }
+    });
   }
 
   async function handleIgnore(smsHash) {
     const token=localStorage.getItem("token");
+    const originalTxn = pending.find(t=>t.sms_hash===smsHash);
     setIgnoring(smsHash);
-    try {
-      const r=await fetch(`${API}/api/detected/ignore/${smsHash}`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});
-      if(!r.ok) throw new Error();
-      showToast("Transaction ignored.",true);
-      await load();
-    } catch { showToast("Something went wrong. Try again.",false); }
-    finally { setIgnoring(null); }
+
+    // ✅ Remove from UI immediately with animation
+    optimisticRemove(smsHash, async () => {
+      try {
+        const r=await fetch(`${API}/api/detected/ignore/${smsHash}`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});
+        if(!r.ok) {
+          if(originalTxn) setPending(prev=>[originalTxn,...prev]);
+          showToast("Something went wrong. Try again.",false);
+        } else {
+          showToast("Transaction ignored.",true);
+          setTimeout(()=>{busyRef.current=false;load();},2000);
+        }
+      } catch {
+        if(originalTxn) setPending(prev=>[originalTxn,...prev]);
+        showToast("Something went wrong. Try again.",false);
+        busyRef.current=false;
+      } finally {
+        setIgnoring(null);
+      }
+    });
   }
 
   function logout(){localStorage.removeItem("token");navigate("/");}
 
   if(loading) return <LoadingScreen text="Checking your SMS…"/>;
 
-  /* ── Mobile header right slot ── */
-  const MobHeaderRight = (
+  const MobHeaderRight=(
     <div style={{display:"flex",gap:7,alignItems:"center"}}>
       <button onClick={()=>setShowFilter(f=>!f)}
-        style={{width:34,height:34,borderRadius:9,border:"1px solid rgba(255,255,255,.3)",
-          background:showFilter?"rgba(255,255,255,.25)":"rgba(255,255,255,.15)",
-          display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative"}}>
+        style={{width:34,height:34,borderRadius:9,border:"1px solid rgba(255,255,255,.3)",background:showFilter?"rgba(255,255,255,.25)":"rgba(255,255,255,.15)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",position:"relative"}}>
         <Icon d={ICONS.filter} size={16} color="#fff"/>
         {activeFilterCount>0&&<span style={{position:"absolute",top:-3,right:-3,width:14,height:14,borderRadius:"50%",background:"#ef4444",color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{activeFilterCount}</span>}
       </button>
-      <button onClick={()=>{setSpinning(true);load();}}
+      <button onClick={()=>{setSpinning(true);busyRef.current=false;load();}}
         style={{width:34,height:34,borderRadius:9,border:"1px solid rgba(255,255,255,.3)",background:"rgba(255,255,255,.15)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
         <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}>
           <Icon d={ICONS.refresh} size={16} color="#fff"/>
@@ -505,7 +451,6 @@ export default function DetectedTransactions() {
       <Sidebar onLogout={logout} pendingCount={pending.length}/>
       <BottomNav pendingCount={pending.length}/>
 
-      {/* Toast */}
       {toast&&(
         <div style={{position:"fixed",bottom:80,left:12,right:12,zIndex:9999,padding:"11px 16px",borderRadius:10,background:toast.ok?"var(--green)":"var(--red)",color:"#fff",fontSize:13,fontWeight:500,boxShadow:"0 8px 24px rgba(0,0,0,.15)",animation:"slideIn .25s ease",textAlign:"center"}}>
           {toast.text}
@@ -513,15 +458,8 @@ export default function DetectedTransactions() {
       )}
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+        <MobileHeader title="SMS Detected 📱" subtitle={`${pending.length} pending review`} right={MobHeaderRight}/>
 
-        {/* Mobile header */}
-        <MobileHeader
-          title="SMS Detected 📱"
-          subtitle={`${pending.length} pending review`}
-          right={MobHeaderRight}
-        />
-
-        {/* Desktop header */}
         <div className="desk-hdr" style={{background:"var(--surface)",borderBottom:"1px solid var(--border)",padding:"16px 28px",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
           <div>
             <div style={{fontSize:20,fontWeight:700,color:"var(--ink)"}}>SMS Detected 📱</div>
@@ -536,26 +474,18 @@ export default function DetectedTransactions() {
               <Icon d={ICONS.filter} size={13}/>Filters
               {activeFilterCount>0&&<span style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:"50%",background:"var(--accent)",color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{activeFilterCount}</span>}
             </button>
-            <button onClick={()=>{setSpinning(true);load();}}
+            <button onClick={()=>{setSpinning(true);busyRef.current=false;load();}}
               style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:7,border:"1px solid var(--border)",background:"var(--surface)",color:"var(--ink2)",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
-              <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}><Icon d={ICONS.refresh} size={13}/></span>
-              Refresh
+              <span style={{display:"inline-block",animation:spinning?"spin .7s linear infinite":"none"}}><Icon d={ICONS.refresh} size={13}/></span>Refresh
             </button>
           </div>
         </div>
 
-        {/* ── Page content ── */}
         <div className="det-page" style={{flex:1,overflowY:"auto",padding:"16px 20px 28px",background:"var(--bg)"}}>
-
-          {error&&(
-            <div className="fade" style={{marginBottom:10,padding:"10px 14px",borderRadius:8,background:"var(--rbg)",border:"1px solid var(--rborder)",color:"var(--red)",fontSize:13}}>
-              ⚠️ {error}
-            </div>
-          )}
+          {error&&<div className="fade" style={{marginBottom:10,padding:"10px 14px",borderRadius:8,background:"var(--rbg)",border:"1px solid var(--rborder)",color:"var(--red)",fontSize:13}}>⚠️ {error}</div>}
 
           {pending.length>0&&<SummaryBar pending={pending}/>}
 
-          {/* Info banner — compact single line */}
           {pending.length>0&&(
             <div className="fade" style={{marginBottom:10,padding:"8px 12px",borderRadius:9,background:"var(--bbg)",border:"1px solid var(--bborder)",display:"flex",alignItems:"center",gap:8}}>
               <Icon d={ICONS.sms} size={14} color="var(--blue)"/>
@@ -565,21 +495,9 @@ export default function DetectedTransactions() {
             </div>
           )}
 
-          {/* Filter panel */}
-          {showFilter&&(
-            <div className="fade">
-              <FilterBar filters={filters} onChange={setFilters} counts={counts}/>
-            </div>
-          )}
+          {showFilter&&<div className="fade"><FilterBar filters={filters} onChange={setFilters} counts={counts}/></div>}
+          {showFilter&&filtered.length!==pending.length&&<div style={{marginBottom:8,fontSize:11,color:"var(--ink3)"}}>Showing {filtered.length} of {pending.length} transactions</div>}
 
-          {/* Filter result count */}
-          {showFilter&&filtered.length!==pending.length&&(
-            <div style={{marginBottom:8,fontSize:11,color:"var(--ink3)"}}>
-              Showing {filtered.length} of {pending.length} transactions
-            </div>
-          )}
-
-          {/* Empty: all caught up */}
           {pending.length===0&&!error&&(
             <div className="fade" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"48px 20px",textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{fontSize:36,marginBottom:10}}>✅</div>
@@ -588,45 +506,33 @@ export default function DetectedTransactions() {
             </div>
           )}
 
-          {/* Empty filter match */}
           {pending.length>0&&filtered.length===0&&(
             <div className="fade" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"32px 20px",textAlign:"center"}}>
               <div style={{fontSize:28,marginBottom:8}}>🔍</div>
               <div style={{fontSize:13,fontWeight:600,color:"var(--ink2)",marginBottom:8}}>No matches for these filters</div>
-              <button onClick={()=>setFilters({type:"all",amount:"all",category:"All",date:"all"})}
-                style={{padding:"7px 16px",borderRadius:7,background:"var(--accent)",color:"#fff",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                Clear filters
-              </button>
+              <button onClick={()=>setFilters({type:"all",amount:"all",category:"All",date:"all"})} style={{padding:"7px 16px",borderRadius:7,background:"var(--accent)",color:"#fff",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Clear filters</button>
             </div>
           )}
 
-          {/* ── Mobile card list ── */}
           {filtered.length>0&&(
             <>
-              {/* Mobile */}
               <div className="mob-only" style={{flexDirection:"column",gap:0}}>
                 {filtered.map(txn=>(
-                  <TxnCard
-                    key={txn.id}
-                    txn={txn}
-                    onAccept={handleAccept}
-                    onIgnore={handleIgnore}
+                  <TxnCard key={txn.id} txn={txn}
+                    onAccept={handleAccept} onIgnore={handleIgnore}
                     accepting={accepting===txn.sms_hash}
                     ignoring={ignoring===txn.sms_hash}
+                    removing={removing.has(txn.sms_hash)}
                   />
                 ))}
               </div>
-
-              {/* Desktop */}
               <div style={{display:"flex",flexDirection:"column",gap:10}} className="desk-hdr">
                 {filtered.map(txn=>(
-                  <TxnRow
-                    key={txn.id}
-                    txn={txn}
-                    onAccept={handleAccept}
-                    onIgnore={handleIgnore}
+                  <TxnRow key={txn.id} txn={txn}
+                    onAccept={handleAccept} onIgnore={handleIgnore}
                     accepting={accepting===txn.sms_hash}
                     ignoring={ignoring===txn.sms_hash}
+                    removing={removing.has(txn.sms_hash)}
                   />
                 ))}
               </div>
