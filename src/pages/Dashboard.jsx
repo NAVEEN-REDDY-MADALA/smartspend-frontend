@@ -465,17 +465,25 @@ export default function Dashboard() {
   },[selectedMonth]);
 
   // ── FIX 4: Merge expenses + incomes in recent list so income txns show too ─
-  const recent=useMemo(()=>{
-    const exps=filteredExpenses.map(t=>({...t,_type:"expense"}));
-    const incs=filteredIncomes.map(t=>({...t,_type:"income"}));
-    return [...exps,...incs]
-      .sort((a,b)=>{
-        if(b.id&&a.id&&b.id!==a.id) return b.id-a.id;
-        const da=new Date(((a.created_at||a.date||"").replace(" ","T"))+(!(a.created_at||"").includes("Z")&&!(a.created_at||"").includes("+")?"Z":""));
-        const db=new Date(((b.created_at||b.date||"").replace(" ","T"))+(!(b.created_at||"").includes("Z")&&!(b.created_at||"").includes("+")?"Z":""));
-        return db-da;
-      }).slice(0,8);
-  },[filteredExpenses,filteredIncomes]);
+  const recent = useMemo(() => {
+  // Tag expenses
+  const exps = filteredExpenses.map(t => ({...t, _type:"expense"}));
+  // Tag incomes — use source field as merchant for display
+  const incs = filteredIncomes.map(t => ({
+    ...t,
+    _type: "income",
+    merchant: t.merchant || t.source || "Income",  // ← FIX: income uses "source" not "merchant"
+    category: t.category || "Income",
+  }));
+  return [...exps, ...incs]
+    .sort((a, b) => {
+      const da = new Date(((a.created_at||a.date||"").replace(" ","T")) + 
+        (!(a.created_at||"").includes("Z") && !(a.created_at||"").includes("+") ? "Z" : ""));
+      const db = new Date(((b.created_at||b.date||"").replace(" ","T")) + 
+        (!(b.created_at||"").includes("Z") && !(b.created_at||"").includes("+") ? "Z" : ""));
+      return db - da;
+    }).slice(0, 8);
+}, [filteredExpenses, filteredIncomes]);
 
   if(loading) return (
     <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}>
@@ -594,6 +602,7 @@ export default function Dashboard() {
               ):recent.map((t,i)=>{
                 const auto=isAutoTx(t);
                 const isIncome=isIncomeTx(t);
+                
                 const merchant=t.merchant||t.merchant_name||t.description||null;
                 const cat=t.category||(isIncome?"Income":"Other");
                 const dateStr=fmtTxDate(t.created_at||t.date);
