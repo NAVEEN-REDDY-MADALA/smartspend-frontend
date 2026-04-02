@@ -48,7 +48,7 @@ const CSS = `
     .desk-hdr{display:flex!important;}
   }
 `;
-// 
+
 function injectCSS() {
   if (typeof document==="undefined"||document.getElementById("__det3__")) return;
   const s=document.createElement("style"); s.id="__det3__"; s.textContent=CSS;
