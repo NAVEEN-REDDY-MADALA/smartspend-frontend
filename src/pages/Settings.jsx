@@ -92,14 +92,20 @@ function injectCSS() {
 
 const NAV_SECTIONS = [
   { label: null, items: [{ to: "/dashboard", label: "Home", icon: "home" }] },
-  { label: "Track Money", items: [{ to: "/transactions", label: "Transactions", icon: "tx" }, { to: "/analytics", label: "Analytics", icon: "analytics" }, { to: "/goals", label: "My Goals", icon: "goals" }, { to: "/budgets", label: "My Budgets", icon: "budget" }] },
+  { label: "Track Money", items: [
+    { to: "/transactions", label: "Transactions", icon: "tx" }, 
+    { to: "/analytics", label: "Analytics", icon: "analytics" }, 
+    { to: "/goals", label: "My Goals", icon: "goals" }, 
+    { to: "/budgets", label: "My Budgets", icon: "budget" }
+  ]},
   { label: "Auto Features", items: [
-    // { to: "/detected-transactions", label: "SMS Detected", icon: "detect" },
-     { to: "/reminders", label: "Reminders", icon: "reminder" }] },
+    { to: "/detected-transactions", label: "SMS Detected", icon: "detect" },
+    { to: "/reminders", label: "Reminders", icon: "reminder" }
+  ]},
   { label: "Account", items: [{ to: "/settings", label: "Settings", icon: "home" }] },
 ];
 
-function Sidebar({ onLogout }) {
+function Sidebar({ onLogout, pendingCount = 0 }) {
   const location = useLocation();
   const path = location.pathname;
   return (
@@ -107,7 +113,6 @@ function Sidebar({ onLogout }) {
       <div style={{ padding: "22px 18px 16px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg,#6366f1,#818cf8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#fff", boxShadow: "0 4px 12px rgba(99,102,241,.4)" }}>S</div>
         <div>
-          {/* <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: "-.3px" }}>SmartSpend</div> */}
           <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 1, letterSpacing: ".5px", textTransform: "uppercase" }}>Finance Platform</div>
         </div>
       </div>
@@ -119,6 +124,9 @@ function Sidebar({ onLogout }) {
               <Link key={item.to} to={item.to} className={`slink${path === item.to ? " active" : ""}`}
                 style={{ alignItems: "center", gap: 9, padding: "9px 12px", borderRadius: 9, color: path === item.to ? "#a5b4fc" : "rgba(255,255,255,.55)", fontSize: 13, fontWeight: 500, marginBottom: 2 }}>
                 <Icon d={ICONS[item.icon]} size={14} />{item.label}
+                {item.to === "/detected-transactions" && pendingCount > 0 && (
+                  <span style={{ background: "#ef4444", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 99, padding: "1px 6px", marginLeft: "auto" }}>{pendingCount}</span>
+                )}
               </Link>
             ))}
           </div>
@@ -159,8 +167,13 @@ function ModeOption({ title, description, badge, badgeColor, badgeBg, isSelected
   return (
     <div className={`mode-option${isSelected ? " " + selectedClass : ""}`} onClick={onClick}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {/* Radio */}
-        <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${isSelected ? badgeColor : "var(--border2)"}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all .2s" }}>
+        {/* Radio button */}
+        <div style={{ 
+          width: 20, height: 20, borderRadius: "50%", 
+          border: `2px solid ${isSelected ? badgeColor : "var(--border2)"}`, 
+          display: "flex", alignItems: "center", justifyContent: "center", 
+          flexShrink: 0, transition: "all .2s" 
+        }}>
           {isSelected && <div style={{ width: 10, height: 10, borderRadius: "50%", background: badgeColor }} />}
         </div>
         <div style={{ flex: 1 }}>
@@ -206,24 +219,91 @@ export default function Settings() {
   injectCSS();
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
+  const [pendingCount, setPendingCount] = useState(0);
+  const API = "https://smartspend-backend-production-6f21.up.railway.app";
 
-  // Transaction Mode — saved in localStorage so it persists
-  const [txMode, setTxMode] = useState(() => localStorage.getItem("tx_mode") || "auto");
+  /**
+   * ✅ FIX: Transaction Mode — saved in localStorage AND synced with backend
+   * This ensures the setting persists across app restarts
+   */
+  const [txMode, setTxMode] = useState(() => {
+    const saved = localStorage.getItem("tx_mode");
+    // Default to "auto" if no saved preference
+    return saved === "confirm" ? "confirm" : "auto";
+  });
 
   // Notification toggles
   const [notifs, setNotifs] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("notif_settings") || "{}"); }
-    catch { return {}; }
+    try { 
+      return JSON.parse(localStorage.getItem("notif_settings") || "{}"); 
+    }
+    catch { 
+      return {}; 
+    }
   });
 
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => { if (!token) { navigate("/", { replace: true }); } }, []);
+  useEffect(() => { 
+    if (!token) { 
+      navigate("/", { replace: true }); 
+      return; 
+    }
+    loadPendingCount();
+  }, []);
+
+  /**
+   * ✅ FIX: Sync transaction mode with backend
+   * This ensures the SMS Receiver knows the user's preference
+   */
+  useEffect(() => {
+    if (token) {
+      syncModeToBackend(txMode);
+    }
+  }, [txMode, token]);
+
+  async function loadPendingCount() {
+    try {
+      const res = await fetch(`${API}/api/detected/count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPendingCount(data.count || 0);
+      }
+    } catch(e) { 
+      console.error("Failed to load pending count:", e); 
+    }
+  }
+
+  /**
+   * ✅ FIX: Sync mode to backend so SmsReceiver knows the setting
+   */
+  async function syncModeToBackend(mode) {
+    try {
+      const response = await fetch(`${API}/api/user/settings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ transaction_mode: mode })
+      });
+      if (!response.ok) {
+        console.warn("Failed to sync mode to backend");
+      }
+    } catch (e) {
+      console.warn("Backend sync error:", e);
+    }
+  }
 
   function setMode(mode) {
     setTxMode(mode);
     localStorage.setItem("tx_mode", mode);
     showSaved();
+    
+    // ✅ Broadcast to other components that mode changed
+    window.dispatchEvent(new CustomEvent("transaction-mode-change", { detail: { mode } }));
   }
 
   function toggleNotif(key) {
@@ -238,14 +318,19 @@ export default function Settings() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  function logout() { localStorage.removeItem("token"); navigate("/", { replace: true }); }
+  function logout() { 
+    localStorage.removeItem("token"); 
+    localStorage.removeItem("tx_mode");
+    localStorage.removeItem("notif_settings");
+    navigate("/", { replace: true }); 
+  }
 
   const getNotif = (key, defaultVal = true) => notifs[key] !== undefined ? notifs[key] : defaultVal;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar onLogout={logout} />
-      <BottomNav />
+      <Sidebar onLogout={logout} pendingCount={pendingCount} />
+      <BottomNav pendingCount={pendingCount} />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
@@ -402,10 +487,11 @@ export default function Settings() {
           <div className="f3">
             <SectionHeader title="About" />
             <div className="card" style={{ padding: "0 20px", marginBottom: 20 }}>
-              <AboutRow label="Version" value="1.0.0" />
+              <AboutRow label="Version" value="2.0.0" />
               <AboutRow label="SMS Detection" value="All major Indian banks" />
               <AboutRow label="Backend" value="SmartSpend Cloud" />
-              <AboutRow label="Platform" value="Web + Android" isLast />
+              <AboutRow label="Platform" value="Web + Android" />
+              <AboutRow label="Supported Banks" value="SBI, HDFC, ICICI, Axis, Kotak, Canara, Union Bank, Paytm, GPay, PhonePe, BHIM" isLast />
             </div>
           </div>
 
@@ -421,6 +507,43 @@ export default function Settings() {
                 <button onClick={logout}
                   style={{ padding: "8px 18px", borderRadius: 9, background: "var(--rbg)", border: "1.5px solid var(--rborder)", color: "var(--red)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font)", display: "flex", alignItems: "center", gap: 6 }}>
                   <Icon d={ICONS.logout} size={14} color="var(--red)" /> Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Data Management Section (NEW) ── */}
+          <div className="f5" style={{ marginTop: 8 }}>
+            <SectionHeader title="Data Management" />
+            <div className="card" style={{ padding: "16px 20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 3 }}>Export Data</div>
+                  <div style={{ fontSize: 12, color: "var(--ink4)" }}>Download all your transactions as CSV</div>
+                </div>
+                <button
+                  onClick={() => {
+                    // TODO: Implement export functionality
+                    alert("Export feature coming soon!");
+                  }}
+                  style={{ padding: "8px 18px", borderRadius: 9, background: "var(--bbg)", border: "1.5px solid var(--bborder)", color: "var(--blue)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font)" }}>
+                  📥 Export
+                </button>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 3 }}>Clear All Data</div>
+                  <div style={{ fontSize: 12, color: "var(--ink4)" }}>Delete all transactions and reset app</div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (window.confirm("⚠️ Are you sure? This will delete ALL your transactions and cannot be undone!")) {
+                      // TODO: Implement clear data functionality
+                      alert("Clear data feature coming soon!");
+                    }
+                  }}
+                  style={{ padding: "8px 18px", borderRadius: 9, background: "var(--rbg)", border: "1.5px solid var(--rborder)", color: "var(--red)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font)" }}>
+                  🗑️ Clear All
                 </button>
               </div>
             </div>

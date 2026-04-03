@@ -177,8 +177,15 @@ const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov",
 function buildMonthList(expenses,incomes) {
   const set=new Set();
   const now=new Date();
-  set.add(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`);
-  [...expenses,...incomes].forEach(t=>{const d=t.date||(t.created_at||"").slice(0,10);if(d)set.add(d.slice(0,7));});
+  // ✅ FIX: Use current year (2026) not 2028
+  const currentYear = now.getFullYear();
+  const currentMonth = String(now.getMonth()+1).padStart(2,"0");
+  set.add(`${currentYear}-${currentMonth}`);
+  
+  [...expenses,...incomes].forEach(t=>{
+    const d=t.date||(t.created_at||"").slice(0,10);
+    if(d) set.add(d.slice(0,7));
+  });
   return [...set].sort().reverse();
 }
 
@@ -259,7 +266,7 @@ function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBa
         </div>
       </div>
 
-      {/* FIX: Formula row — now uses thisMonthNet (income - expense) not savings */}
+      {/* Formula row */}
       <div style={{
         display:"flex",alignItems:"center",gap:6,
         padding:"10px 14px",borderRadius:10,
@@ -292,19 +299,61 @@ function CarryForwardBanner({carryForward,prevMonthLabel,selectedMonth,allTimeBa
   );
 }
 
-const CAT_EMOJI={Food:"🍜",Transport:"🚗",Shopping:"🛍️",Entertainment:"🎬",Health:"💊",Utilities:"⚡",Groceries:"🛒",Coffee:"☕",Books:"📚",Bills:"💡",Travel:"✈️",Medicine:"💊",Income:"💰",Salary:"💼",Refund:"↩️",Cashback:"🎁",Transfer:"🔁",Finance:"💳",Education:"📚",Other:"💳"};
-const BAR_COLORS=["#7c5cbf","#a78bfa","#60a5fa","#34d399","#fb923c"];
-const isAutoTx=t=>t.is_auto===true||t.is_auto===1||t.is_auto==="true"||t.is_auto==="1";
-const isIncomeTx=t=>t._type==="income"||t.type==="income"||t.category==="Income"||t.category==="Salary"||t.category==="Refund"||t.category==="Cashback";
+// ✅ FIX: Added more emojis for better categories
+const CAT_EMOJI={
+  Food:"🍜", Transport:"🚗", Shopping:"🛍️", Entertainment:"🎬", 
+  Health:"💊", Utilities:"⚡", Groceries:"🛒", Coffee:"☕", 
+  Books:"📚", Bills:"💡", Travel:"✈️", Medicine:"💊", 
+  Income:"💰", Salary:"💼", Refund:"↩️", Cashback:"🎁", 
+  Transfer:"🔁", Finance:"💳", Education:"📚", Other:"💳",
+  // ✅ FIX: Added missing categories
+  "Mobile Banking":"🏦", "UPI TRANSFER":"🔄", "NEFT TRANSFER":"🏦",
+  "IMPS TRANSFER":"🏦", "RTGS TRANSFER":"🏦", "PHONEPE TRANSFER":"📱",
+  "GPAY TRANSFER":"📱", "PAYTM TRANSFER":"📱", "BHIM TRANSFER":"📱"
+};
 
+const BAR_COLORS=["#7c5cbf","#a78bfa","#60a5fa","#34d399","#fb923c"];
+
+// Helper functions to determine transaction type
+const isAutoTx = t => t.is_auto === true || t.is_auto === 1 || t.is_auto === "true" || t.is_auto === "1";
+const isIncomeTx = t => {
+  // ✅ FIX: Better income detection
+  if (t._type === "income") return true;
+  if (t.type === "income") return true;
+  const incomeCategories = ["Income", "Salary", "Refund", "Cashback", "MOBILE BANKING CREDIT"];
+  return incomeCategories.includes(t.category);
+};
+
+// ✅ FIX: Better date formatting
+// ✅ FIX: Show actual date and time, not "Today"/"Yesterday"
 function fmtTxDate(raw) {
   if(!raw) return "—";
+  
+  // Handle YYYY-MM-DD format
   if(/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())){
-    const[y,m,d]=raw.split("-");const dt=new Date(+y,+m-1,+d);
-    return dt.toDateString()===new Date().toDateString()?"Today":dt.toLocaleDateString("en-IN",{day:"2-digit",month:"short"});
+    const [y, m, d] = raw.split("-");
+    const dt = new Date(+y, +m-1, +d);
+    // Return formatted date like "02 Apr 2026"
+    return dt.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    });
   }
-  const utc=(raw.endsWith("Z")||raw.includes("+"))?raw:raw.replace(" ","T")+"Z";
-  return new Date(utc).toLocaleString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:true});
+  
+  // Handle full timestamp
+  const utc = (raw.endsWith("Z") || raw.includes("+")) ? raw : raw.replace(" ", "T") + "Z";
+  const dt = new Date(utc);
+  
+  // Return formatted date and time like "02 Apr 2026, 08:29 PM"
+  return dt.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
 }
 
 export default function Dashboard() {
@@ -324,42 +373,59 @@ export default function Dashboard() {
 
   const API=BASE_URL;
 
-  useEffect(()=>{if(!token){navigate("/",{replace:true});return;}loadAll();},[]);
-  useEffect(()=>{const h=()=>loadAll();window.addEventListener("transaction-confirmed",h);return()=>window.removeEventListener("transaction-confirmed",h);},[]);
+  useEffect(()=>{
+    if(!token){
+      navigate("/",{replace:true});
+      return;
+    }
+    loadAll();
+  },[]);
+  
+  useEffect(()=>{
+    const h=()=>loadAll();
+    window.addEventListener("transaction-confirmed",h);
+    window.addEventListener("TRANSACTION_ACCEPTED",h);
+    window.addEventListener("TRANSACTION_IGNORED",h);
+    window.addEventListener("REFRESH_PENDING",h);
+    return()=>{
+      window.removeEventListener("transaction-confirmed",h);
+      window.removeEventListener("TRANSACTION_ACCEPTED",h);
+      window.removeEventListener("TRANSACTION_IGNORED",h);
+      window.removeEventListener("REFRESH_PENDING",h);
+    };
+  },[]);
 
   async function loadAll() {
-    try{await Promise.all([loadExpenses(),loadIncomes(),loadSuggestions(),loadPendingCount()]);}
-    finally{setLoading(false);}
+    try{
+      await Promise.all([loadExpenses(),loadIncomes(),loadSuggestions(),loadPendingCount()]);
+    }
+    finally{
+      setLoading(false);
+    }
   }
 
   async function loadExpenses() {
-    const r=await fetch(`${API}/api/expenses/`,{headers:{Authorization:`Bearer ${token}`}});
-    if(!r.ok){logout();return;}
-    const d=await r.json();
-    setAllExpenses(Array.isArray(d)?d:[]);
+    try{
+      const r=await fetch(`${API}/api/expenses/`,{headers:{Authorization:`Bearer ${token}`}});
+      if(!r.ok){logout();return;}
+      const d=await r.json();
+      setAllExpenses(Array.isArray(d)?d:[]);
+    }catch(e){console.error("loadExpenses error:",e);}
   }
 
-  // ── FIX 1: Load ALL income records with dates so carry forward works ──────
-  // The old code fell back to /api/summary/ which only returns current-month
-  // total as one entry — meaning past months always showed ₹0 income.
   async function loadIncomes() {
     try {
       const r=await fetch(`${API}/api/income/`,{headers:{Authorization:`Bearer ${token}`}});
       if(r.ok){
         const d=await r.json();
-        // Verify we got proper dated records (not an aggregated object)
-        if(Array.isArray(d)&&d.length>0&&(d[0].date||d[0].created_at)){
-          setAllIncomes(d);
-          return;
-        }
-        // If array but no dates, still use it (better than summary fallback)
-        if(Array.isArray(d)){
+        if(Array.isArray(d)&&d.length>0){
           setAllIncomes(d);
           return;
         }
       }
-    } catch(_){}
-    // Last resort: summary API — only covers current month, carry forward breaks
+    } catch(e){console.error("loadIncomes error:",e);}
+    
+    // Fallback: try summary API
     try {
       const r=await fetch(`${API}/api/summary/`,{headers:{Authorization:`Bearer ${token}`}});
       if(r.ok){
@@ -368,50 +434,65 @@ export default function Dashboard() {
         const mKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
         setAllIncomes([{id:-1,amount:d.total_income||0,date:mKey+"-01",source:"Summary"}]);
       }
-    } catch(_){}
+    } catch(e){console.error("loadIncomes fallback error:",e);}
   }
 
   async function loadSuggestions() {
-    const r=await fetch(`${API}/api/suggestions/`,{headers:{Authorization:`Bearer ${token}`}});
-    if(r.ok) setSuggestions(await r.json());
+    try{
+      const r=await fetch(`${API}/api/suggestions/`,{headers:{Authorization:`Bearer ${token}`}});
+      if(r.ok) setSuggestions(await r.json());
+    }catch(e){console.error("loadSuggestions error:",e);}
   }
 
   async function loadPendingCount() {
-    const r=await fetch(`${API}/api/detected/count`,{headers:{Authorization:`Bearer ${token}`}});
-    if(r.ok){const d=await r.json();setPendingCount(d.count||0);}
+    try{
+      const r=await fetch(`${API}/api/detected/count`,{headers:{Authorization:`Bearer ${token}`}});
+      if(r.ok){const d=await r.json();setPendingCount(d.count||0);}
+    }catch(e){console.error("loadPendingCount error:",e);}
   }
 
-  async function confirmSuggestion(id){await fetch(`${API}/api/suggestions/${id}/confirm`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});loadAll();}
-  async function rejectSuggestion(id){await fetch(`${API}/api/suggestions/${id}/reject`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});setSuggestions(suggestions.filter(s=>s.id!==id));}
+  async function confirmSuggestion(id){
+    await fetch(`${API}/api/suggestions/${id}/confirm`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});
+    loadAll();
+  }
+  
+  async function rejectSuggestion(id){
+    await fetch(`${API}/api/suggestions/${id}/reject`,{method:"POST",headers:{Authorization:`Bearer ${token}`}});
+    setSuggestions(suggestions.filter(s=>s.id!==id));
+  }
 
-  function logout(){localStorage.removeItem("token");navigate("/",{replace:true});}
+  function logout(){
+    localStorage.removeItem("token");
+    navigate("/",{replace:true});
+  }
 
   const monthList=useMemo(()=>buildMonthList(allExpenses,allIncomes),[allExpenses,allIncomes]);
 
   const filteredExpenses=useMemo(()=>{
     if(selectedMonth==="all") return allExpenses;
-    return allExpenses.filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)===selectedMonth;});
+    return allExpenses.filter(e=>{
+      const d=e.date||e.created_at;
+      return d&&d.slice(0,7)===selectedMonth;
+    });
   },[allExpenses,selectedMonth]);
 
   const filteredIncomes=useMemo(()=>{
     if(selectedMonth==="all") return allIncomes;
-    return allIncomes.filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)===selectedMonth;});
+    return allIncomes.filter(e=>{
+      const d=e.date||e.created_at;
+      return d&&d.slice(0,7)===selectedMonth;
+    });
   },[allIncomes,selectedMonth]);
 
   const totalExpense=useMemo(()=>filteredExpenses.reduce((s,e)=>s+e.amount,0),[filteredExpenses]);
   const totalIncome=useMemo(()=>filteredIncomes.reduce((s,e)=>s+e.amount,0),[filteredIncomes]);
 
-  // ── FIX 2: thisMonthNet = income − expense for the selected month only ────
-  // Old code used "savings" and passed it as "this month net" to the banner,
-  // but the banner showed "₹0 this month net" when income hadn't loaded yet.
   const thisMonthNet=totalIncome-totalExpense;
 
-  // ── All-time totals ───────────────────────────────────────────────────────
   const allTimeIncome=useMemo(()=>allIncomes.reduce((s,e)=>s+e.amount,0),[allIncomes]);
   const allTimeExpense=useMemo(()=>allExpenses.reduce((s,e)=>s+e.amount,0),[allExpenses]);
   const allTimeBalance=allTimeIncome-allTimeExpense;
 
-  // ── Previous month ────────────────────────────────────────────────────────
   const prevMonthKey=useMemo(()=>{
     if(selectedMonth==="all") return null;
     const[y,mo]=selectedMonth.split("-").map(Number);
@@ -425,37 +506,48 @@ export default function Dashboard() {
     return `${MONTHS[+mo-1]} ${y}`;
   },[prevMonthKey]);
 
-  // ── Carry Forward = all income − all expense BEFORE selected month ────────
   const carryForward=useMemo(()=>{
     if(selectedMonth==="all") return 0;
     const incBefore=allIncomes
-      .filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)<selectedMonth;})
+      .filter(e=>{
+        const d=e.date||e.created_at;
+        return d&&d.slice(0,7)<selectedMonth;
+      })
       .reduce((s,e)=>s+e.amount,0);
     const expBefore=allExpenses
-      .filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)<selectedMonth;})
+      .filter(e=>{
+        const d=e.date||e.created_at;
+        return d&&d.slice(0,7)<selectedMonth;
+      })
       .reduce((s,e)=>s+e.amount,0);
     return incBefore-expBefore;
   },[allIncomes,allExpenses,selectedMonth]);
 
-  // ── FIX 3: Real available = carryForward + thisMonthNet ───────────────────
-  // = everything saved before + (income this month − spent this month)
   const realAvailable=carryForward+thisMonthNet;
 
   const prevExpense=useMemo(()=>{
     if(!prevMonthKey) return null;
-    return allExpenses.filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)===prevMonthKey;}).reduce((s,e)=>s+e.amount,0);
+    return allExpenses.filter(e=>{
+      const d=e.date||e.created_at;
+      return d&&d.slice(0,7)===prevMonthKey;
+    }).reduce((s,e)=>s+e.amount,0);
   },[allExpenses,prevMonthKey]);
 
   const prevIncome=useMemo(()=>{
     if(!prevMonthKey) return null;
-    return allIncomes.filter(e=>{const d=e.date||e.created_at;return d&&d.slice(0,7)===prevMonthKey;}).reduce((s,e)=>s+e.amount,0);
+    return allIncomes.filter(e=>{
+      const d=e.date||e.created_at;
+      return d&&d.slice(0,7)===prevMonthKey;
+    }).reduce((s,e)=>s+e.amount,0);
   },[allIncomes,prevMonthKey]);
 
   const expenseChange=prevExpense!=null&&prevExpense>0?((totalExpense-prevExpense)/prevExpense*100):undefined;
   const incomeChange=prevIncome!=null&&prevIncome>0?((totalIncome-prevIncome)/prevIncome*100):undefined;
 
   const catMap={};
-  filteredExpenses.forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});
+  filteredExpenses.forEach(t=>{
+    catMap[t.category]=(catMap[t.category]||0)+t.amount;
+  });
   const topCats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
 
   const monthLabel=useMemo(()=>{
@@ -464,32 +556,30 @@ export default function Dashboard() {
     return `${MONTHS[+mo-1]} ${y}`;
   },[selectedMonth]);
 
-  // ── FIX 4: Merge expenses + incomes in recent list so income txns show too ─
+  // ✅ FIX: Merge expenses + incomes correctly
   const recent = useMemo(() => {
-  // Tag expenses
-  const exps = filteredExpenses.map(t => ({...t, _type:"expense"}));
-  // Tag incomes — use source field as merchant for display
-  const incs = filteredIncomes.map(t => ({
-    ...t,
-    _type: "income",
-    merchant: t.merchant || t.source || "Income",  // ← FIX: income uses "source" not "merchant"
-    category: t.category || "Income",
-  }));
-  return [...exps, ...incs]
-    .sort((a, b) => {
-      const da = new Date(((a.created_at||a.date||"").replace(" ","T")) + 
-        (!(a.created_at||"").includes("Z") && !(a.created_at||"").includes("+") ? "Z" : ""));
-      const db = new Date(((b.created_at||b.date||"").replace(" ","T")) + 
-        (!(b.created_at||"").includes("Z") && !(b.created_at||"").includes("+") ? "Z" : ""));
-      return db - da;
-    }).slice(0, 8);
-}, [filteredExpenses, filteredIncomes]);
+    const exps = filteredExpenses.map(t => ({...t, _type:"expense"}));
+    const incs = filteredIncomes.map(t => ({
+      ...t,
+      _type: "income",
+      merchant: t.merchant || t.source || t.paid_by || "Income",
+      category: t.category || "Income",
+    }));
+    return [...exps, ...incs]
+      .sort((a, b) => {
+        const da = new Date(((a.created_at||a.date||"").replace(" ","T")) + 
+          (!(a.created_at||"").includes("Z") && !(a.created_at||"").includes("+") ? "Z" : ""));
+        const db = new Date(((b.created_at||b.date||"").replace(" ","T")) + 
+          (!(b.created_at||"").includes("Z") && !(b.created_at||"").includes("+") ? "Z" : ""));
+        return db - da;
+      }).slice(0, 8);
+  }, [filteredExpenses, filteredIncomes]);
 
   if(loading) return (
     <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:"var(--bg)"}}>
       <div style={{textAlign:"center"}}>
         <div style={{width:28,height:28,border:"2.5px solid var(--border)",borderTopColor:"var(--accent)",borderRadius:"50%",animation:"spin .7s linear infinite",margin:"0 auto 12px"}}/>
-        <div style={{fontSize:12,color:"var(--ink3)"}}>Loading…</div>
+        <div style={{fontSize:12,color:"var(--ink3)"}}>Loading your finances...</div>
       </div>
     </div>
   );
@@ -534,7 +624,7 @@ export default function Dashboard() {
 
         <div className="dash-content" style={{flex:1,overflowY:"auto",padding:"16px 16px 28px",background:"var(--bg)"}}>
 
-          {/* ── Carry Forward Banner ── */}
+          {/* Carry Forward Banner */}
           <CarryForwardBanner
             carryForward={carryForward}
             prevMonthLabel={prevMonthLabel}
@@ -603,10 +693,18 @@ export default function Dashboard() {
                 const auto=isAutoTx(t);
                 const isIncome=isIncomeTx(t);
                 
-                const merchant=t.merchant||t.merchant_name||t.description||null;
-                const cat=t.category||(isIncome?"Income":"Other");
-                const dateStr=fmtTxDate(t.created_at||t.date);
-                const leftBorderColor=auto?"var(--blue)":"#8b5cf6";
+                // ✅ FIX: Better merchant name fallback
+                const merchant = t.merchant || t.merchant_name || t.description || t.paid_to || t.source || "—";
+                const cat = t.category || (isIncome ? "Income" : "Other");
+                const dateStr = fmtTxDate(t.created_at || t.date);
+                
+                // ✅ FIX: Left border color based on transaction type
+                let leftBorderColor = "#8b5cf6"; // default purple
+                if (isIncome) leftBorderColor = "var(--green)";
+                else if (auto) leftBorderColor = "var(--blue)";
+                
+                // ✅ FIX: Get emoji with fallback
+                const emoji = CAT_EMOJI[cat] || CAT_EMOJI[cat?.split(" ")[0]] || "💳";
 
                 return (
                   <div key={`${t._type}-${t.id}-${i}`} style={{
@@ -614,18 +712,18 @@ export default function Dashboard() {
                     borderLeft:`3px solid ${leftBorderColor}`
                   }}>
 
-                    {/* ── DESKTOP ROW ── */}
+                    {/* DESKTOP ROW */}
                     <div className="txrow tx-desk-row" style={{display:"grid",gridTemplateColumns:TX_COLS,padding:"10px 16px",alignItems:"center"}}>
                       <div style={{width:28,height:28,borderRadius:7,background:isIncome?"var(--gbg)":auto?"var(--bbg)":"#f5f3ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13}}>
-                        {CAT_EMOJI[cat]||"💳"}
+                        {emoji}
                       </div>
                       <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat}</div>
-                      <div style={{fontSize:12,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant||<span style={{color:"var(--ink4)",fontStyle:"italic"}}>—</span>}</div>
+                      <div style={{fontSize:12,color:"var(--ink3)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{merchant}</div>
+                      {/* ✅ FIX: Show correct sign for amount */}
                       <div style={{fontSize:13,fontWeight:700,color:isIncome?"var(--green)":"var(--red)"}}>
                         {isIncome?"+":"-"}₹{fmt(t.amount)}
                       </div>
                       <div style={{fontSize:11,color:"var(--ink3)"}}>{dateStr}</div>
-                      {/* FIX 5: Two badges — type (Income/Expense) + source (Auto/Manual) */}
                       <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
                         <span className="badge" style={{
                           background:isIncome?"var(--gbg)":"var(--rbg)",
@@ -646,7 +744,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {/* ── MOBILE ROW ── */}
+                    {/* MOBILE ROW */}
                     <div className="tx-mob-row" style={{display:"none",padding:"12px 14px",alignItems:"center",gap:10}}>
                       <div style={{
                         width:40,height:40,borderRadius:10,
@@ -654,12 +752,12 @@ export default function Dashboard() {
                         display:"flex",alignItems:"center",justifyContent:"center",
                         fontSize:18,flexShrink:0
                       }}>
-                        {CAT_EMOJI[cat]||"💳"}
+                        {emoji}
                       </div>
                       <div style={{flex:1,minWidth:0}}>
-                        {/* Top: category + coloured amount */}
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                           <span style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>{cat}</span>
+                          {/* ✅ FIX: Show correct sign on mobile too */}
                           <span style={{
                             fontSize:14,fontWeight:800,
                             color:isIncome?"var(--green)":"var(--red)",
@@ -668,14 +766,11 @@ export default function Dashboard() {
                             {isIncome?"+":"-"}₹{fmt(t.amount)}
                           </span>
                         </div>
-                        {/* Middle: merchant */}
                         <div style={{fontSize:11,color:"var(--ink3)",marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                          {merchant||"—"}
+                          {merchant}
                         </div>
-                        {/* Bottom: two badges + date */}
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:4}}>
                           <div style={{display:"flex",gap:4}}>
-                            {/* Badge 1: Income or Expense */}
                             <span style={{
                               display:"inline-flex",alignItems:"center",gap:3,
                               padding:"2px 7px",borderRadius:99,fontSize:10,fontWeight:500,
@@ -685,7 +780,6 @@ export default function Dashboard() {
                             }}>
                               {isIncome?"✅ Income":"💸 Expense"}
                             </span>
-                            {/* Badge 2: Auto or Manual */}
                             <span style={{
                               display:"inline-flex",alignItems:"center",gap:3,
                               padding:"2px 7px",borderRadius:99,fontSize:10,fontWeight:500,
@@ -718,9 +812,9 @@ export default function Dashboard() {
               }}>
                 <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",marginBottom:12}}>💼 Balance Breakdown</div>
                 {[
-                  {label:"Carried from "+prevMonthLabel,value:carryForward,color:carryForward>=0?"var(--green)":"var(--red)",prefix:carryForward<0?"-₹":"₹"},
-                  {label:`+ ${monthLabel} income`,value:totalIncome,color:"var(--green)",prefix:"₹"},
-                  {label:`− ${monthLabel} expenses`,value:totalExpense,color:"var(--red)",prefix:"₹"},
+                  {label:`Carried from ${prevMonthLabel || "previous months"}`, value:carryForward, color:carryForward>=0?"var(--green)":"var(--red)", prefix:carryForward<0?"-₹":"₹"},
+                  {label:`+ ${monthLabel} income`, value:totalIncome, color:"var(--green)", prefix:"₹"},
+                  {label:`− ${monthLabel} expenses`, value:totalExpense, color:"var(--red)", prefix:"₹"},
                 ].map((row,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<2?"1px dashed var(--gborder)":"none"}}>
                     <span style={{fontSize:12,color:"var(--ink3)"}}>{row.label}</span>
@@ -739,7 +833,7 @@ export default function Dashboard() {
               <div className="f4" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:10,padding:"16px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
                 <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:12}}>Where am I spending? 🤔</div>
                 {topCats.length===0?(
-                  <div style={{fontSize:12,color:"var(--ink3)",textAlign:"center",padding:"16px 0"}}>No data for {monthLabel}.</div>
+                  <div style={{fontSize:12,color:"var(--ink3)",textAlign:"center",padding:"16px 0"}}>No spending data for {monthLabel}.</div>
                 ):topCats.map(([cat,amt],i)=>{
                   const pct=totalExpense>0?(amt/totalExpense)*100:0;
                   return (

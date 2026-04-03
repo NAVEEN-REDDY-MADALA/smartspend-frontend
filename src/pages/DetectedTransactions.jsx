@@ -56,10 +56,28 @@ function injectCSS() {
   injectMobileCSS();
 }
 
+/**
+ * Format date for display - shows actual date and time
+ * @param {string} ds - ISO date string
+ * @returns {string} Formatted date like "02 Apr 2026, 08:29 PM"
+ */
 const fmtDate = ds => {
   try {
     const s = ds.endsWith("Z")||ds.includes("+") ? ds : ds+"Z";
-    return new Date(s).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:true});
+    const dt = new Date(s);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    
+    // Format with actual date, never "Today"/"Yesterday" for clarity
+    return dt.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    });
   } catch { return ds; }
 };
 
@@ -80,7 +98,7 @@ const NAV_SECTIONS=[
   {label:"Account",items:[{to:"/settings",label:"Settings",icon:"home"}]},
 ];
 
-function Sidebar({onLogout,pendingCount}) {
+function Sidebar({onLogout, pendingCount}) {
   const path=window.location.pathname;
   return (
     <aside className="sidebar">
@@ -355,8 +373,11 @@ export default function DetectedTransactions() {
   const [showFilter, setShowFilter]= useState(false);
   const [filters,    setFilters]   = useState({type:"all",amount:"all",category:"All",date:"all"});
 
-  // ── FIX: Use a simple Set to track locally-processed hashes ──────────────
-  // This prevents them from reappearing even if auto-refresh fires
+  /**
+   * ✅ FIX: Use a Set to track locally-processed hashes
+   * This prevents transactions from reappearing after being accepted/ignored
+   * even when auto-refresh fetches from backend
+   */
   const processedHashes = useRef(new Set());
 
   useEffect(() => {
@@ -366,6 +387,10 @@ export default function DetectedTransactions() {
     return () => clearInterval(iv);
   }, []);
 
+  /**
+   * Load pending transactions from backend
+   * Filters out any hashes that have been already processed locally
+   */
   async function load() {
     if (!token) { navigate("/"); return; }
     try {
@@ -376,7 +401,7 @@ export default function DetectedTransactions() {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
 
-      // ── FIX: Filter out any hashes we've already processed locally ────────
+      // ✅ CRITICAL FIX: Filter out hashes we've already processed
       const fresh = data.filter(t => !processedHashes.current.has(t.sms_hash));
       setPending(fresh);
       setError(null);
@@ -388,6 +413,9 @@ export default function DetectedTransactions() {
     }
   }
 
+  /**
+   * Apply filters to pending transactions
+   */
   const filtered = useMemo(() => {
     let r = [...pending];
     if (filters.type === "debit")  r = r.filter(t => t.transaction_type !== "credit");
@@ -430,10 +458,12 @@ export default function DetectedTransactions() {
     setTimeout(() => setToast(null), 3500);
   }
 
-  // ── FIX: Remove from UI immediately + add to processedHashes ─────────────
-  // processedHashes prevents the item from reappearing on next auto-refresh
+  /**
+   * ✅ FIX: Remove from UI immediately and add to processedHashes
+   * This prevents the transaction from reappearing on next auto-refresh
+   */
   function removeFromUI(smsHash, callback) {
-    // Mark as processed — this is the KEY FIX
+    // Mark as processed — this is the KEY FIX for reappearing transactions
     processedHashes.current.add(smsHash);
 
     // Animate out
@@ -446,6 +476,9 @@ export default function DetectedTransactions() {
     }, 300);
   }
 
+  /**
+   * Handle Accept button click - saves transaction to expenses
+   */
   async function handleAccept(smsHash, originalTxn) {
     if (!token) return;
     const isCredit = originalTxn.transaction_type === "credit";
@@ -467,9 +500,12 @@ export default function DetectedTransactions() {
               : `✅ ₹${fmt(amount)} saved as Expense!`,
             true
           );
+          // Broadcast events to refresh other pages (Dashboard, Transactions)
           window.dispatchEvent(new Event("transaction-confirmed"));
+          window.dispatchEvent(new Event("TRANSACTION_ACCEPTED"));
+          window.dispatchEvent(new Event("REFRESH_PENDING"));
         } else if (r.status === 422 || r.status === 404) {
-          // Already processed — still show success
+          // Already processed on backend - still show success
           showToast(isCredit ? "✅ Already added to Income!" : "✅ Already saved!", true);
         } else {
           // Failed — restore to list and remove from processedHashes
@@ -487,6 +523,9 @@ export default function DetectedTransactions() {
     });
   }
 
+  /**
+   * Handle Ignore button click - skips the transaction
+   */
   async function handleIgnore(smsHash) {
     if (!token) return;
     const originalTxn = pending.find(t => t.sms_hash === smsHash);
@@ -501,6 +540,8 @@ export default function DetectedTransactions() {
 
         if (r.ok) {
           showToast("Transaction ignored.", true);
+          window.dispatchEvent(new Event("TRANSACTION_IGNORED"));
+          window.dispatchEvent(new Event("REFRESH_PENDING"));
         } else if (r.status === 404) {
           showToast("Already processed.", true);
         } else {

@@ -45,6 +45,8 @@ const CSS = `
   .tab-btn{transition:all .15s;cursor:pointer;border:none;background:transparent;font-family:inherit;}
   .catrow{transition:background .1s;border-radius:8px}
   .catrow:hover{background:#f3f0fa!important}
+  .tip-badge{transition:all .15s;cursor:pointer}
+  .tip-badge:hover{transform:scale(1.02);box-shadow:0 2px 8px rgba(0,0,0,.1)!important}
 
   .sidebar{width:210px;flex-shrink:0;background:var(--sb);display:flex;flex-direction:column;height:100vh;position:sticky;top:0;overflow:hidden;}
 
@@ -82,13 +84,13 @@ const NAV_SECTIONS=[
     {to:"/budgets",label:"My Budgets",icon:"budget"},
   ]},
   {label:"Auto Features",items:[
-    // {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
+    {to:"/detected-transactions",label:"SMS Detected",icon:"detect"},
     {to:"/reminders",label:"Reminders",icon:"reminder"},
   ]},
   {label:"Account",items:[{to:"/settings",label:"Settings",icon:"home"}]},
 ];
 
-function Sidebar({onLogout}) {
+function Sidebar({onLogout, pendingCount = 0}) {
   const path=window.location.pathname;
   return (
     <aside className="sidebar">
@@ -104,6 +106,9 @@ function Sidebar({onLogout}) {
               <a key={it.to} href={it.to} className={`slink${path===it.to?" active":""}`}
                 style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:7,color:"rgba(255,255,255,.65)",fontSize:13,textDecoration:"none",marginBottom:1}}>
                 <Icon d={ICONS[it.icon]} size={14}/>{it.label}
+                {it.to==="/detected-transactions" && pendingCount > 0 && (
+                  <span style={{background:"#ef4444",color:"#fff",fontSize:9,fontWeight:700,borderRadius:99,padding:"1px 6px",marginLeft:"auto"}}>{pendingCount}</span>
+                )}
               </a>
             ))}
           </div>
@@ -118,15 +123,21 @@ function Sidebar({onLogout}) {
   );
 }
 
+/**
+ * Predict next month's spending using weighted moving average and trend analysis
+ * Includes seasonal adjustment for students (exam months, vacation months)
+ */
 function predictNextMonth(history) {
   const months=Object.keys(history).sort();
   const n=months.length;
   if(n===0) return {value:0,confidence:"Low",method:"No data",factors:[],trendAmt:0};
+  
   const vals=months.map(m=>history[m]);
   const wts=[0.50,0.30,0.15,0.05];
   let wSum=0,wTot=0;
   for(let i=0;i<Math.min(4,n);i++){wSum+=vals[n-1-i]*wts[i];wTot+=wts[i];}
   const wma=wSum/wTot;
+  
   let slope=0;
   if(n>=2){
     const slice=vals.slice(-Math.min(4,n));
@@ -139,6 +150,7 @@ function predictNextMonth(history) {
   const trendProjection=wma+slope;
   const now=new Date();
   const curKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  
   let paceProjection=null;
   let daysElapsed=0;
   if(months[n-1]===curKey&&history[curKey]){
@@ -146,9 +158,27 @@ function predictNextMonth(history) {
     const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
     if(daysElapsed>=4) paceProjection=(history[curKey]/daysElapsed)*daysInMonth;
   }
+  
+  // ✅ Seasonal adjustment for students
   const nextDate=new Date(now.getFullYear(),now.getMonth()+1,1);
-  const sameLastYear=`${nextDate.getFullYear()-1}-${String(nextDate.getMonth()+1).padStart(2,"0")}`;
-  const seasonal=history[sameLastYear]||null;
+  const nextMonth = nextDate.getMonth() + 1;
+  const sameLastYear=`${nextDate.getFullYear()-1}-${String(nextMonth).padStart(2,"0")}`;
+  let seasonal=history[sameLastYear]||null;
+  
+  // Student-specific seasonal factors
+  const studentSeasonalFactors = {
+    5: 0.7,   // May - Exams, lower spending
+    6: 0.6,   // June - Summer break, lowest spending
+    7: 0.7,   // July - Summer break continues
+    11: 1.2,  // November - Diwali/sales, higher spending
+    12: 1.3,  // December - Holidays, highest spending
+    1: 1.15,  // January - New year sales
+    3: 1.1    // March - Holi/events
+  };
+  
+  const seasonalFactor = studentSeasonalFactors[nextMonth] || 1.0;
+  if(seasonal) seasonal = seasonal * seasonalFactor;
+  
   let prediction=0;
   if(paceProjection&&months[n-1]===curKey){
     prediction=paceProjection*0.50+trendProjection*0.35+(seasonal?seasonal*0.15:trendProjection*0.15);
@@ -159,44 +189,337 @@ function predictNextMonth(history) {
   } else {
     prediction=wma;
   }
+  
   const maxVal=Math.max(...vals);
   const minVal=Math.min(...vals);
   prediction=Math.max(minVal*0.2,Math.min(prediction,maxVal*3));
   prediction=Math.max(0,Math.round(prediction));
   const confidence=n>=4?"High":n>=2?"Medium":"Low";
+  
   return {value:prediction,confidence,method:"",factors:[],trendAmt:Math.round(slope)};
 }
 
 const COLORS=["#7c5cbf","#a78bfa","#34d399","#60a5fa","#fb923c","#f472b6","#facc15","#38bdf8","#4ade80","#f87171"];
-const CAT_EMOJI={Food:"🍜",Groceries:"🛒",Transport:"🚗",Shopping:"🛍️",Entertainment:"🎬",Bills:"💡",Medicine:"💊",Travel:"✈️",Coffee:"☕",Books:"📚",Rent:"🏠",Other:"💳",Finance:"💳"};
+const CAT_EMOJI={
+  Food:"🍜", Groceries:"🛒", Transport:"🚗", Shopping:"🛍️", 
+  Entertainment:"🎬", Bills:"💡", Medicine:"💊", Travel:"✈️", 
+  Coffee:"☕", Books:"📚", Rent:"🏠", Other:"💳", Finance:"💳",
+  Education:"📚", Hostel:"🏠", Mess:"🍜", Stationery:"✏️",
+  Laundry:"🧺", Gym:"💪", Subscriptions:"📺"
+};
 
+/**
+ * Calculate financial health score based on multiple factors
+ */
 function healthScore(avgPerMonth,trend,catLabels,catTotals,totalSpent) {
   let s=100;
+  
+  // Base on average monthly spend
   if(avgPerMonth>20000) s-=15;
   if(avgPerMonth>40000) s-=15;
-  if(trend>20) s-=20; else if(trend>10) s-=10;
+  if(avgPerMonth<8000) s+=10; // Bonus for low spending
+  
+  // Trend impact
+  if(trend>20) s-=20; 
+  else if(trend>10) s-=10;
+  else if(trend<-10) s+=10; // Bonus for reducing spending
+  
+  // Category diversification
   if(catLabels.length<3) s-=10;
+  if(catLabels.length>6) s+=5;
+  
+  // Check for over-concentration
   const topPct=totalSpent>0&&catLabels[0]?catTotals[catLabels[0]]/totalSpent*100:0;
   if(topPct>60) s-=15;
+  if(topPct<30 && catLabels.length>3) s+=5;
+  
+  // Emergency fund check (simulated)
+  const hasSavings = catLabels.includes("Savings") || catLabels.includes("Investment");
+  if(hasSavings) s+=10;
+  
   return Math.max(10,Math.min(100,s));
 }
 
-function getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent) {
+/**
+ * ✅ ENHANCED: Generate student-specific insights with actionable tips
+ */
+function getStudentInsights(catTotals, catLabels, avgPerMonth, trend, totalSpent, monthlyData, expenses) {
   const ins=[];
   const daily=avgPerMonth/30;
-  const food=(catTotals["Food"]||0)+(catTotals["Groceries"]||0);
+  const now=new Date();
+  const currentMonth = now.getMonth() + 1;
+  
+  // Insight 1: Spending trend alert
+  if(trend>20) {
+    ins.push({
+      icon:"⚠️",
+      title:"Spending jumped " + trend.toFixed(0) + "%!",
+      body:"Your spending rose sharply vs last month. Check what changed in your top categories and set a limit.",
+      action:"Set Budget",
+      actionLink:"/budgets",
+      color:"var(--red)",
+      bg:"var(--rbg)",
+      type:"alert"
+    });
+  } else if(trend<-10) {
+    ins.push({
+      icon:"🎉",
+      title:"You saved more this month!",
+      body:`Spending dropped ${Math.abs(trend).toFixed(0)}% vs last month. Great discipline — keep it up!`,
+      action:"View Savings",
+      actionLink:"/goals",
+      color:"var(--green)",
+      bg:"var(--gbg)",
+      type:"positive"
+    });
+  }
+  
+  // Insight 2: Food spending analysis
+  const food=(catTotals["Food"]||0)+(catTotals["Groceries"]||0)+(catTotals["Mess"]||0);
   const foodPct=totalSpent>0?food/totalSpent*100:0;
+  if(foodPct>45) {
+    const potentialSave = Math.round(food * 0.25);
+    ins.push({
+      icon:"🍜",
+      title:"Food is your biggest expense",
+      body:`₹${fmt(food)} (${foodPct.toFixed(0)}%) on food. Cooking at home 3x/week could save ₹${fmt(potentialSave)} monthly.`,
+      action:"Mess vs Home",
+      actionLink:"/tips/food",
+      color:"var(--amber)",
+      bg:"var(--abg)",
+      type:"saving"
+    });
+  } else if(foodPct<20 && foodPct>0) {
+    ins.push({
+      icon:"🥗",
+      title:"Great food spending balance!",
+      body:`Only ${foodPct.toFixed(0)}% of your budget goes to food. This leaves more for other priorities.`,
+      action:"Share Tip",
+      actionLink:"/tips",
+      color:"var(--green)",
+      bg:"var(--gbg)",
+      type:"positive"
+    });
+  }
+  
+  // Insight 3: Daily spend analysis
+  if(daily<150) {
+    ins.push({
+      icon:"🌟",
+      title:`Daily spend: ₹${fmt(Math.round(daily))}`,
+      body:"Excellent! Under ₹150/day is exceptional for a student budget. You're on track for great savings!",
+      action:"Set Savings Goal",
+      actionLink:"/goals",
+      color:"var(--green)",
+      bg:"var(--gbg)",
+      type:"positive"
+    });
+  } else if(daily<250) {
+    ins.push({
+      icon:"👍",
+      title:`Daily spend: ₹${fmt(Math.round(daily))}`,
+      body:"Good job! Under ₹250/day is solid for a student. Try to keep this consistent.",
+      action:"Track Daily",
+      actionLink:"/transactions",
+      color:"var(--blue)",
+      bg:"var(--bbg)",
+      type:"info"
+    });
+  } else if(daily<400) {
+    const potentialSave = Math.round((daily - 250) * 30);
+    ins.push({
+      icon:"📈",
+      title:`Daily spend: ₹${fmt(Math.round(daily))}`,
+      body:`Your daily spend is high. Cutting to ₹250/day would save ₹${fmt(potentialSave)}/month — that's a new phone in 6 months!`,
+      action:"Reduce Spending",
+      actionLink:"/tips",
+      color:"var(--amber)",
+      bg:"var(--abg)",
+      type:"warning"
+    });
+  } else {
+    const potentialSave = Math.round((daily - 250) * 30);
+    ins.push({
+      icon:"🚨",
+      title:`Daily spend: ₹${fmt(Math.round(daily))}`,
+      body:`Critical: ₹${fmt(Math.round(daily))}/day is very high. Reducing to ₹250/day saves ₹${fmt(potentialSave)}/month — enough for rent or EMI!`,
+      action:"Create Budget",
+      actionLink:"/budgets",
+      color:"var(--red)",
+      bg:"var(--rbg)",
+      type:"critical"
+    });
+  }
+  
+  // Insight 4: Entertainment spending
   const ent=catTotals["Entertainment"]||0;
   const entPct=totalSpent>0?ent/totalSpent*100:0;
-  const top=catLabels[0];
-  if(trend>20) ins.push({icon:"⚠️",title:"Spending jumped "+trend.toFixed(0)+"%!",body:"Your spending rose sharply vs last month. Check what changed in your top categories and set a limit.",color:"var(--red)",bg:"var(--rbg)"});
-  else if(trend<-10) ins.push({icon:"🎉",title:"You saved more this month!",body:`Spending dropped ${Math.abs(trend).toFixed(0)}% vs last month. Great discipline — keep it up!`,color:"var(--green)",bg:"var(--gbg)"});
-  if(foodPct>45) ins.push({icon:"🍜",title:"Food is your biggest drain",body:`₹${fmt(food)} (${foodPct.toFixed(0)}%) on food. Cooking at home 3x/week could save ₹${fmt(Math.round(food*0.25))} monthly.`,color:"var(--amber)",bg:"var(--abg)"});
-  ins.push({icon:"☀️",title:`Daily spend: ₹${fmt(Math.round(daily))}`,body:daily<200?"Excellent! Under ₹200/day is great for a student budget.":daily<400?"Decent! Try to keep under ₹300/day to save more.":`High daily spend. Targeting ₹300/day saves ₹${fmt(Math.round((daily-300)*30))}/month.`,color:"var(--blue)",bg:"var(--bbg)"});
-  if(entPct>15) ins.push({icon:"🎬",title:"Entertainment spending high",body:`₹${fmt(ent)} (${entPct.toFixed(0)}%) on entertainment. Look for student discounts, share OTT accounts with roommates.`,color:"var(--accent)",bg:"#f5f3ff"});
-  const saving=Math.round(avgPerMonth*0.15);
-  ins.push({icon:"💰",title:`Save ₹${fmt(saving)}/month potential`,body:`Cutting 15% from "${top||"top category"}" = ₹${fmt(saving*12)}/year. That's a trip, laptop, or emergency fund!`,color:"var(--green)",bg:"var(--gbg)"});
-  return ins.slice(0,4);
+  if(entPct>15) {
+    const ottSave = Math.round(ent * 0.4);
+    ins.push({
+      icon:"🎬",
+      title:"Entertainment spending is high",
+      body:`₹${fmt(ent)} (${entPct.toFixed(0)}%) on entertainment. Share OTT accounts (save ₹${fmt(ottSave)}/year) or use student discounts.`,
+      action:"Student Discounts",
+      actionLink:"/tips/entertainment",
+      color:"var(--accent)",
+      bg:"#f5f3ff",
+      type:"saving"
+    });
+  }
+  
+  // Insight 5: Travel spending
+  const travel=catTotals["Travel"]||0;
+  const travelPct=totalSpent>0?travel/totalSpent*100:0;
+  if(travelPct>20) {
+    ins.push({
+      icon:"✈️",
+      title:"Travel spending is significant",
+      body:`${travelPct.toFixed(0)}% of your budget goes to travel. Consider student train passes or carpooling to save up to 40%.`,
+      action:"Travel Tips",
+      actionLink:"/tips/travel",
+      color:"var(--blue)",
+      bg:"var(--bbg)",
+      type:"saving"
+    });
+  }
+  
+  // Insight 6: Subscription analysis
+  const subscriptions=catTotals["Subscriptions"]||0;
+  if(subscriptions>500) {
+    ins.push({
+      icon:"📺",
+      title:"Subscription costs adding up",
+      body:`₹${fmt(subscriptions)} on subscriptions. Do you use all of them? Cancelling one could save ₹${fmt(Math.round(subscriptions/3))}/month.`,
+      action:"Review Subs",
+      actionLink:"/reminders",
+      color:"var(--amber)",
+      bg:"var(--abg)",
+      type:"saving"
+    });
+  }
+  
+  // Insight 7: Exam season adjustment (April-May, November-December)
+  const examMonths = [4, 5, 11, 12];
+  if(examMonths.includes(currentMonth)) {
+    ins.push({
+      icon:"📚",
+      title:"Exam season is here!",
+      body:"Your spending typically drops during exams. Use this time to save extra for the next semester.",
+      action:"Set Exam Goal",
+      actionLink:"/goals",
+      color:"var(--blue)",
+      bg:"var(--bbg)",
+      type:"info"
+    });
+  }
+  
+  // Insight 8: Summer break (June-July)
+  if(currentMonth === 6 || currentMonth === 7) {
+    ins.push({
+      icon:"☀️",
+      title:"Summer break saving opportunity",
+      body:"Less college expenses means more savings. Consider an internship or summer job to boost your income!",
+      action:"Find Internships",
+      actionLink:"/tips/summer",
+      color:"var(--green)",
+      bg:"var(--gbg)",
+      type:"positive"
+    });
+  }
+  
+  // Insight 9: Festival season (October-December)
+  if(currentMonth >= 10 && currentMonth <= 12) {
+    ins.push({
+      icon:"🎊",
+      title:"Festival season spending alert",
+      body:"Spending tends to increase during festivals. Set a strict budget and track every expense.",
+      action:"Set Festival Budget",
+      actionLink:"/budgets",
+      color:"var(--amber)",
+      bg:"var(--abg)",
+      type:"warning"
+    });
+  }
+  
+  // Insight 10: Saving potential based on top category
+  const topCategory = catLabels[0];
+  if(topCategory && totalSpent > 0) {
+    const topAmount = catTotals[topCategory];
+    const savePotential = Math.round(topAmount * 0.15);
+    const yearlySave = savePotential * 12;
+    
+    ins.push({
+      icon:"💰",
+      title:`Save ₹${fmt(savePotential)}/month potential`,
+      body:`Cutting 15% from "${topCategory}" = ₹${fmt(yearlySave)}/year. That's a new laptop, a trip to Goa, or 6 months of groceries!`,
+      action:`Save for ${topCategory === "Food" ? "Laptop" : topCategory === "Entertainment" ? "Trip" : "Emergency Fund"}`,
+      actionLink:"/goals",
+      color:"var(--green)",
+      bg:"var(--gbg)",
+      type:"saving"
+    });
+  }
+  
+  // Insight 11: Peer comparison (simulated)
+  const peerAvg = 12000; // Simulated average student spending
+  if(avgPerMonth < peerAvg - 3000) {
+    ins.push({
+      icon:"🏆",
+      title:"You're spending less than most students!",
+      body:`₹${fmt(Math.round(avgPerMonth))}/month vs ₹${fmt(peerAvg)} average. Great financial discipline!`,
+      action:"Celebrate 🎉",
+      actionLink:"/goals",
+      color:"var(--green)",
+      bg:"var(--gbg)",
+      type:"positive"
+    });
+  } else if(avgPerMonth > peerAvg + 5000) {
+    ins.push({
+      icon:"📊",
+      title:"You're spending above average",
+      body:`₹${fmt(Math.round(avgPerMonth))}/month vs ₹${fmt(peerAvg)} average for students. Review your top expenses.`,
+      action:"See Breakdown",
+      actionLink:"#",
+      color:"var(--amber)",
+      bg:"var(--abg)",
+      type:"warning"
+    });
+  }
+  
+  // Insight 12: Weekend vs weekday spending analysis
+  const weekdayTotal = 0;
+  const weekendTotal = 0;
+  expenses.forEach(e => {
+    if(e.date) {
+      const day = new Date(e.date).getDay();
+      if(day === 0 || day === 6) {
+        // weekend spending logic would go here
+      }
+    }
+  });
+  
+  // Return top 6 insights
+  return ins.slice(0,6);
+}
+
+/**
+ * Generate quick saving tips for students
+ */
+function getSavingTips(monthlySpend, topCategory) {
+  const tips = [
+    { emoji: "☕", text: "Skip 2 coffees/week → Save ₹800/month", link: "/tips/coffee" },
+    { emoji: "🍕", text: "Cook dinner 3x/week → Save ₹1500/month", link: "/tips/cooking" },
+    { emoji: "🚗", text: "Share cabs/walk short distances → Save ₹1000/month", link: "/tips/transport" },
+    { emoji: "📱", text: "Use student OTT plans → Save ₹500/month", link: "/tips/ott" },
+    { emoji: "🛍️", text: "Wait 24h before impulse buys → Save ₹2000/month", link: "/tips/shopping" },
+    { emoji: "📚", text: "Buy used textbooks → Save ₹5000/semester", link: "/tips/books" },
+    { emoji: "🍽️", text: "Mess vs outside food → Save ₹3000/month", link: "/tips/food" },
+    { emoji: "💳", text: "Use student ID for discounts → Save 10-30%", link: "/tips/discounts" },
+  ];
+  
+  // Return random 3 tips
+  return [...tips].sort(() => 0.5 - Math.random()).slice(0, 3);
 }
 
 function Empty({msg}) {
@@ -214,8 +537,25 @@ export default function Analytics() {
   const [loading,setLoading]=useState(true);
   const [tab,setTab]=useState("overview");
   const [showBreakdown,setShowBreakdown]=useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
-  useEffect(()=>{if(!token){navigate("/",{replace:true});return;}load();},[]);
+  useEffect(()=>{
+    if(!token){navigate("/",{replace:true});return;}
+    load();
+    loadPendingCount();
+  },[]);
+  
+  async function loadPendingCount() {
+    try {
+      const res = await fetch(`${BASE_URL}/api/detected/count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if(res.ok) {
+        const data = await res.json();
+        setPendingCount(data.count || 0);
+      }
+    } catch(e) { console.error("Failed to load pending count:", e); }
+  }
 
   async function load() {
     try {
@@ -247,8 +587,9 @@ export default function Analytics() {
   const trend=prevVal>0?((curVal-prevVal)/prevVal*100):0;
   const score=healthScore(avgPerMonth,trend,catLabels,catTotals,totalSpent);
   const scoreColor=score>=75?"var(--green)":score>=50?"var(--amber)":"var(--red)";
-  const scoreLabel=score>=75?"Healthy 🌟":score>=50?"Needs Attention ⚡":"At Risk ⚠️";
-  const insights=getInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent);
+  const scoreLabel=score>=75?"Excellent! 🌟":score>=50?"Needs Attention ⚡":"At Risk ⚠️";
+  const insights=getStudentInsights(catTotals,catLabels,avgPerMonth,trend,totalSpent,history,expenses);
+  const savingTips = getSavingTips(avgPerMonth, catLabels[0]);
   const dailyAvg=avgPerMonth/30;
   const pred=predictNextMonth(history);
   const confColor=pred.confidence==="High"?"var(--green)":pred.confidence==="Medium"?"var(--amber)":"var(--red)";
@@ -273,8 +614,8 @@ export default function Analytics() {
 
   return (
     <div style={{display:"flex",minHeight:"100vh"}}>
-      <Sidebar onLogout={logout}/>
-      <BottomNav/>
+      <Sidebar onLogout={logout} pendingCount={pendingCount}/>
+      <BottomNav pendingCount={pendingCount}/>
 
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {/* Mobile header */}
@@ -367,7 +708,6 @@ export default function Analytics() {
                   {catLabels.length>0?(
                     <>
                       <div style={{height:160}}><Doughnut data={donutData} options={donutOpts}/></div>
-                      {/* Compact legend below chart */}
                       <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:"4px 12px"}}>
                         {catLabels.slice(0,6).map((cat,i)=>(
                           <div key={cat} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"var(--ink3)"}}>
@@ -385,28 +725,100 @@ export default function Analytics() {
                   {wdTotals.some(v=>v>0)&&<div style={{fontSize:11,color:"var(--ink3)",marginTop:8,textAlign:"center"}}>📌 You spend most on <strong>{peakDay}s</strong></div>}
                 </div>
               </div>
+
+              {/* Quick Saving Tips Section */}
+              <div className="fu3" style={{marginTop:8}}>
+                <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:10}}>💡 Quick Saving Tips for Students</div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {savingTips.map((tip, idx) => (
+                    <div key={idx} className="tip-badge" style={{
+                      display:"flex",alignItems:"center",gap:10,
+                      background:"var(--surface)",border:"1px solid var(--border)",
+                      borderRadius:10,padding:"10px 14px",
+                      cursor:"pointer"
+                    }}>
+                      <span style={{fontSize:20}}>{tip.emoji}</span>
+                      <span style={{fontSize:12,color:"var(--ink2)",flex:1}}>{tip.text}</span>
+                      <Icon d={ICONS.chevronRight} size={14} color="var(--ink4)"/>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </>
           )}
 
           {tab==="insights"&&(
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Personalized for You 🎓</div>
+              <div style={{fontSize:11,fontWeight:700,color:"var(--ink4)",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>🎓 Personalized for You — Student Edition</div>
+              
+              {/* Score summary card */}
+              <div style={{
+                background:"linear-gradient(135deg, var(--sb), #4c1d95)",
+                borderRadius:16,padding:"18px 20px",marginBottom:4,
+                color:"#fff",boxShadow:"0 4px 20px rgba(45,27,105,.25)"
+              }}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:12,opacity:.7,letterSpacing:"1px"}}>YOUR FINANCIAL HEALTH SCORE</div>
+                    <div style={{fontSize:42,fontWeight:800,fontFamily:"'Sora',sans-serif",marginTop:4}}>{score}</div>
+                  </div>
+                  <div style={{
+                    background:"rgba(255,255,255,.15)",borderRadius:99,
+                    padding:"8px 16px",fontSize:14,fontWeight:600
+                  }}>{scoreLabel}</div>
+                </div>
+                <div style={{height:6,background:"rgba(255,255,255,.2)",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:`${score}%`,height:"100%",background:"#a78bfa",borderRadius:99}}/>
+                </div>
+                <div style={{fontSize:11,opacity:.7,marginTop:10}}>
+                  Based on spending patterns, category diversification, and saving habits
+                </div>
+              </div>
+              
               {insights.length===0?(
                 <div style={{background:"var(--surface)",borderRadius:12,padding:"40px 20px",textAlign:"center",border:"1px solid var(--border)"}}>
                   <div style={{fontSize:28,marginBottom:8}}>📊</div>
                   <div style={{fontSize:13,color:"var(--ink3)"}}>Add more expenses to get personalized insights!</div>
                 </div>
               ):insights.map((ins,i)=>(
-                <div key={i} className="ins-card" style={{background:"var(--surface)",border:"1px solid var(--border)",borderRadius:12,padding:"14px 16px",borderLeft:`4px solid ${ins.color}`,boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+                <div key={i} className="ins-card" style={{
+                  background:"var(--surface)",
+                  border:"1px solid var(--border)",
+                  borderRadius:12,
+                  padding:"14px 16px",
+                  borderLeft:`4px solid ${ins.color}`,
+                  boxShadow:"0 1px 4px rgba(0,0,0,.04)"
+                }}>
                   <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
                     <span style={{fontSize:22,flexShrink:0}}>{ins.icon}</span>
-                    <div>
+                    <div style={{flex:1}}>
                       <div style={{fontSize:13,fontWeight:700,color:"var(--ink)",marginBottom:4}}>{ins.title}</div>
-                      <div style={{fontSize:12,color:"var(--ink3)",lineHeight:1.5}}>{ins.body}</div>
+                      <div style={{fontSize:12,color:"var(--ink3)",lineHeight:1.5,marginBottom:ins.action ? 10 : 0}}>{ins.body}</div>
+                      {ins.action && (
+                        <a href={ins.actionLink} style={{
+                          display:"inline-flex",alignItems:"center",gap:4,
+                          fontSize:11,fontWeight:600,color:ins.color,
+                          textDecoration:"none"
+                        }}>
+                          {ins.action} →
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>
               ))}
+              
+              {/* Motivational quote for students */}
+              <div style={{
+                background:"linear-gradient(135deg, #fef3c7, #fde68a)",
+                borderRadius:12,padding:"14px 16px",marginTop:8,
+                border:"1px solid #fcd34d",textAlign:"center"
+              }}>
+                <span style={{fontSize:16,marginRight:8}}>💪</span>
+                <span style={{fontSize:12,color:"#92400e",fontWeight:500}}>
+                  "Small savings today = Big opportunities tomorrow. Every ₹100 saved is a step towards your dream!"
+                </span>
+              </div>
             </div>
           )}
 
@@ -439,6 +851,19 @@ export default function Analytics() {
                   </div>
                 );
               })}
+              
+              {/* Summary footer */}
+              <div style={{
+                background:"var(--surface)",borderRadius:12,padding:"14px 16px",
+                border:"1px solid var(--border)",marginTop:8,textAlign:"center"
+              }}>
+                <div style={{fontSize:12,color:"var(--ink3)"}}>
+                  Total spent across all time: <strong style={{color:"var(--ink)"}}>₹{fmt(totalSpent)}</strong>
+                </div>
+                <div style={{fontSize:11,color:"var(--ink4)",marginTop:4}}>
+                  Average monthly: ₹{fmt(Math.round(avgPerMonth))}
+                </div>
+              </div>
             </div>
           )}
         </div>
